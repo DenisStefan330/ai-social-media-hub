@@ -1,13 +1,11 @@
 import os
-import time
-import urllib.parse
 import requests
 import re
 from bs4 import BeautifulSoup
 import streamlit as st
 
 # ==========================================
-# 1. GESTIONARE SECURATĂ A CHEILOR API
+# 1. GESTIONARE SECURE A CHEILOR API
 # ==========================================
 def get_secret(key_name: str) -> str:
     try:
@@ -107,13 +105,13 @@ if "current_topic" not in st.session_state:
 UI_TEXTS = {
     "Română": {
         "app_title": "AI Social Media Hub",
-        "app_sub": "Platformă Enterprise de Generare Campanii Multi-Platformă",
+        "app_sub": "Platformă Enterprise de Generare Conținut Multi-Platformă",
         "input_label": "🔗 Subiect sau URL Articol:",
         "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul AI-ului în medicină",
         "lang_label": "🌐 Limba Conținutului",
         "tone_label": "⚡ Tonul Campaniei",
         "toggle_img": "🎨 Generare Imagine (FLUX AI)",
-        "btn_gen": "✨ Generează Campania",
+        "btn_gen": "✨ Generează Postările",
         "sidebar_title": "💬 Istoric Postări",
         "new_chat": "➕ Postare Nouă",
         "settings_title": "⚙️ Setări & Preferințe",
@@ -124,13 +122,13 @@ UI_TEXTS = {
     },
     "English": {
         "app_title": "AI Social Media Hub",
-        "app_sub": "Enterprise Multi-Platform Campaign Generator",
+        "app_sub": "Enterprise Multi-Platform Content Generator",
         "input_label": "🔗 Subject or Article URL:",
         "input_placeholder": "Ex: https://techcrunch.com/... OR Future of AI in medicine",
         "lang_label": "🌐 Content Language",
         "tone_label": "⚡ Campaign Tone",
         "toggle_img": "🎨 Generate Image (FLUX AI)",
-        "btn_gen": "✨ Generate Campaign",
+        "btn_gen": "✨ Generate Posts",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
         "settings_title": "⚙️ Settings & Preferences",
@@ -143,72 +141,8 @@ UI_TEXTS = {
 
 t = UI_TEXTS[st.session_state.ui_lang]
 
-font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px)": "18px"}
-active_font_size = font_size_map.get(st.session_state.font_size, "15px")
-
-theme_css = ""
-if st.session_state.theme_mode == "Light (Mod Luminos)":
-    theme_css = """
-    [data-testid="stAppViewContainer"] { background-color: #ffffff !important; color: #0f172a !important; }
-    .mockup-container { background-color: #f8fafc !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
-    """
-elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
-    theme_css = """
-    [data-testid="stAppViewContainer"] { background-color: #0e1117 !important; color: #fafafa !important; }
-    .mockup-container { background-color: #1e293b !important; color: #fafafa !important; border: 1px solid #334155 !important; }
-    """
-
 # ==========================================
-# 4. DESIGN CSS CURAT & DINAMIC
-# ==========================================
-
-st.markdown(f"""
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-    .stApp {{
-        font-family: 'Inter', sans-serif !important;
-    }}
-    
-    .stButton button {{
-        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border-radius: 12px !important;
-        padding: 0.75rem !important;
-        border: none !important;
-        width: 100% !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-    }}
-    .stButton button:hover {{
-        opacity: 0.95;
-        transform: translateY(-1px);
-    }}
-
-    .mockup-container, .mockup-container * {{
-        font-size: {active_font_size} !important;
-    }}
-    .mockup-container {{
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 24px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-        line-height: 1.6;
-    }}
-    .mockup-header {{ display: flex; align-items: center; margin-bottom: 16px; }}
-    .mockup-avatar {{ width: 44px; height: 44px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }}
-    .mockup-name {{ font-weight: 700; font-size: 16px !important; margin: 0; }}
-    .mockup-meta {{ font-size: 13px !important; opacity: 0.7; margin: 0; }}
-    .brand-linkedin {{ border-top: 4px solid #0a66c2; }}
-    .brand-twitter {{ border-top: 4px solid #38bdf8; }}
-    .brand-instagram {{ border-top: 4px solid #e1306c; }}
-    .mockup-content {{ white-space: pre-wrap; }}
-
-    {theme_css}
-    </style>
-""", unsafe_allow_html=True)
-
-# ==========================================
-# 5. MODALUL DE SETĂRI NATIV (ST.DIALOG)
+# 4. MODALUL DE SETĂRI NATIV (ST.DIALOG)
 # ==========================================
 
 @st.dialog(t['settings_title'])
@@ -238,7 +172,7 @@ def settings_modal():
         st.rerun()
 
 # ==========================================
-# 6. BARA LATERALĂ (ISTORIC POSTĂRI)
+# 5. BARA LATERALĂ (ISTORIC POSTĂRI)
 # ==========================================
 
 with st.sidebar:
@@ -264,20 +198,16 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# 7. HEADER PRINCIPAL CU ICONIȚĂ ROTIȚĂ ⚙️
+# 6. HEADER PRINCIPAL ȘI INTERFAȚĂ
 # ==========================================
 
 head_col1, head_col2 = st.columns([11, 1])
 with head_col1:
-    st.markdown(f"<h2 style='margin:0; font-weight:800;'>{t['app_title']}</h2>", unsafe_allow_html=True)
-    st.markdown(f"<p style='opacity:0.7; margin-bottom:1.5rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='margin:0; font-size: 2.2rem; color: #2563eb;'>{t['app_title']}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='opacity:0.7; margin-top:0.3rem; margin-bottom:1.8rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
 with head_col2:
     if st.button("⚙️", help="Setări"):
         settings_modal()
-
-# ==========================================
-# 8. INTERFAȚA DE INPUT & GENERARE
-# ==========================================
 
 topic_input = st.text_input(t['input_label'], value=st.session_state.current_topic, placeholder=t['input_placeholder'])
 
@@ -309,7 +239,7 @@ if generate_btn:
                     st.error(str(e))
                     st.stop()
 
-        st.markdown("### ✍️ Se generează campania...")
+        st.markdown("### ✍️ Se generează conținutul...")
         stream_container = st.empty()
         
         user_prompt = f"SUBJECT/CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
@@ -329,7 +259,7 @@ if generate_btn:
         li_post = extract_section(full_response, "[LINKEDIN]", "[TWITTER]")
         tw_post = extract_section(full_response, "[TWITTER]", "[INSTAGRAM]")
         ig_post = extract_section(full_response, "[INSTAGRAM]", "[IMG_PROMPT]")
-        img_prompt = extract_section(full_source:=full_response, "[IMG_PROMPT]")
+        img_prompt = extract_section(full_response, "[IMG_PROMPT]")
 
         if not li_post: li_post = full_response
         if not img_prompt: img_prompt = f"Professional corporate illustration of {topic_input}, 8k"
@@ -356,12 +286,12 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE ȘI MOCKUPS
+# 7. AFIȘARE REZULTATE CU COMPONENTE NATIVE
 # ==========================================
 
 if st.session_state.current_posts:
     st.markdown("---")
-    st.markdown("## 📱 Rezultate Postare")
+    st.markdown("## 📱 Rezultate Campanie")
     
     col_viz, col_posts = st.columns([1.2, 2])
     
@@ -377,36 +307,17 @@ if st.session_state.current_posts:
         st.caption(st.session_state.current_posts['img_prompt'])
 
     with col_posts:
-        # LinkedIn Mockup
-        st.markdown(f"""
-        <div class="mockup-container brand-linkedin">
-            <div class="mockup-header">
-                <div class="mockup-avatar"></div>
-                <div><p class="mockup-name">Professional Profile</p><p class="mockup-meta">Acum • 🌍</p></div>
-            </div>
-            <div class="mockup-content">{st.session_state.current_posts['linkedin']}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("#### 💼 LinkedIn Post")
+        st.text_area("LinkedIn", value=st.session_state.current_posts['linkedin'], height=180, key="ta_li", label_visibility="collapsed")
         
-        # Twitter Mockup
         if st.session_state.current_posts['twitter']:
-            st.markdown(f"""
-            <div class="mockup-container brand-twitter">
-                <div class="mockup-header">
-                    <div class="mockup-avatar" style="border-radius:10px;"></div>
-                    <div><p class="mockup-name">Brand Account <span style="color:#38bdf8;">✔</span></p><p class="mockup-meta">@brand_hub • 1m</p></div>
-                </div>
-                <div class="mockup-content">{st.session_state.current_posts['twitter']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown("#### 🐦 Twitter / X Post")
+            st.text_area("Twitter", value=st.session_state.current_posts['twitter'], height=120, key="ta_tw", label_visibility="collapsed")
             
-        # Instagram Mockup (Antetul complet a fost scos de tot pentru a asigura stabilitate totală a DOM-ului)
         if st.session_state.current_posts['instagram']:
-            st.markdown(f"""
-            <div class="mockup-container brand-instagram">
-                <div class="mockup-content"><b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown("#### 📸 Instagram Caption")
+            ig_full_text = f"social_hub_official {st.session_state.current_topic or ''} {st.session_state.current_posts['instagram']}"
+            st.text_area("Instagram", value=ig_full_text, height=140, key="ta_ig", label_visibility="collapsed")
 
         full_export = (
             f"=== LINKEDIN ===\n{st.session_state.current_posts['linkedin']}\n\n"
