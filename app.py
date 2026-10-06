@@ -2,371 +2,383 @@ import os
 import time
 import urllib.parse
 import requests
-import io
+import re
+from bs4 import BeautifulSoup
 import streamlit as st
 
 # ==========================================
-# FUNCȚII HELPER (Business Logic & API Calls)
+# 1. GESTIONARE SECURE A CHEILOR API (Server-Side)
+# ==========================================
+def get_secret(key_name: str) -> str:
+    try:
+        return st.secrets[key_name]
+    except Exception:
+        return os.environ.get(key_name, "")
+
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
+
+# ==========================================
+# 2. FUNCȚII DE BACKEND (Scraping, Groq & FLUX)
 # ==========================================
 
+def scrape_url_content(url: str) -> str:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        title = soup.title.string if soup.title else "Articol"
+        paragraphs = soup.find_all('p')
+        content = " ".join([p.get_text() for p in paragraphs])
+        
+        return f"TITLU: {title}\nCONȚINUT: {content[:5000]}"
+    except Exception as e:
+        raise Exception(f"Nu am putut citi link-ul. Asigură-te că este public. ({str(e)})")
 
-def generate_text_groq(prompt: str, api_key: str) -> str:
+def stream_groq_text(prompt: str, api_key: str):
     from groq import Groq
     client = Groq(api_key=api_key)
     
-    # 1. Modele de bază extrem de stabile (curente)
-    primary_models = [
-        "llama3-8b-8192",  # Varianta standard Llama 3, foarte stabilă pe Free Tier
-        "gemma2-9b-it",    # Modelul Google, o rezervă excelentă
-        "llama-3.3-70b-versatile"
-    ]
-    
-    last_error = None
-    
-    # ETAPA A: Încercăm lista principală secvențial
-    for model_name in primary_models:
-        try:
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You are an elite AI Social Media R&D Strategist."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2048,
-            )
-            return completion.choices[0].message.content
-        except Exception as e:
-            last_error = str(e)
-            continue
-            
-    # ETAPA B: Auto-Descoperire (Dynamic Fallback)
-    # Dacă ajungem aici, înseamnă că Groq a schimbat din nou modelele. 
-    # Interogăm API-ul pentru a afla modelele active la care contul tău are acces acum.
+    system_prompt = (
+        "You are an elite Social Media Copywriter and Content Strategist. "
+        "Create viral, insightful posts based on the user's topic or provided article text. "
+        "CRITICAL RULES: "
+        "1. You MUST format the output EXACTLY with these markers so the system can parse it:\n"
+        "[LINKEDIN]\n...linkedin post here...\n"
+        "[TWITTER]\n...twitter post here...\n"
+        "[INSTAGRAM]\n...instagram caption here...\n"
+        "[IMG_PROMPT]\n...1 highly detailed, professional visual prompt in English for FLUX image generator...\n"
+        "2. Do not use generic fluff. Use strong hooks and data-driven insights."
+    )
+
     try:
-        available_models = client.models.list().data
-        
-        # Filtrăm modelele pentru a le păstra doar pe cele de text 
-        # (excludem audio 'whisper' și viziune 'llava'/'vision')
-        text_models = [
-            m.id for m in available_models 
-            if "whisper" not in m.id.lower() 
-            and "llava" not in m.id.lower()
-            and "vision" not in m.id.lower()
-        ]
-        
-        # Încercăm primul model de text găsit pe server care e valabil pentru noi
-        for dynamic_model in text_models:
-            try:
-                completion = client.chat.completions.create(
-                    model=dynamic_model,
-                    messages=[
-                        {"role": "system", "content": "You are an elite AI Social Media R&D Strategist."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=2048,
-                )
-                return completion.choices[0].message.content
-            except Exception:
-                continue
-                
-    except Exception as api_err:
-        raise Exception(f"Eroare de sistem la obținerea noilor modele Groq: {str(api_err)}")
-        
-    # Dacă absolut totul eșuează (situație extrem de rară - ex. API picat global)
-    raise Exception(f"Platforma Groq a refuzat cererea pe toate modelele disponibile. Ultima eroare: {last_error}")
+        stream = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2500,
+            stream=True
+        )
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+    except Exception:
+        stream_fb = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+            temperature=0.7, max_tokens=2500, stream=True
+        )
+        for chunk in stream_fb:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
 
-
-
-def generate_image_pollinations(prompt: str, width: int = 1280, height: int = 720) -> bytes:
-    # Optimizare: Adaugam 'high quality, professional' in engleza pentru a forta modelul vizual
-    enhanced_prompt = f"Professional conceptual digital art depicting: {prompt}, high resolution, corporate aesthetic, clean UI"
-    encoded_prompt = urllib.parse.quote(enhanced_prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&nologo=true"
+def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
+    API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "inputs": image_prompt,
+        "options": {"wait_for_model": True}
+    }
     
-    response = requests.get(url, timeout=15)
+    response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
     response.raise_for_status()
     return response.content
 
 # ==========================================
-# CONFIGURARE UI ȘI TRADUCERI (Presentation)
+# 3. TRADUCERI ȘI CONFIGURARE UI
 # ==========================================
 
-st.set_page_config(
-    page_title="AI Social Media Hub",
-    page_icon="⚡",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
-
-st.markdown("""
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-    html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif !important; }
-    .stTextInput input, .stSelectbox select {
-        background-color: #1e293b !important; color: #f8fafc !important;
-        border: 1px solid #334155 !important; border-radius: 10px !important; padding: 0.6rem !important;
-    }
-    .stTextInput input:focus, .stSelectbox select:focus {
-        border-color: #6366f1 !important; box-shadow: 0 0 0 1px #6366f1 !important;
-    }
-    .stButton button {
-        width: 100%; background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);
-        color: white; font-weight: 600; border: none; border-radius: 10px; padding: 0.75rem;
-        transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-    }
-    .stButton button:hover { opacity: 0.95; transform: translateY(-1px); }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="AI Social Media Hub v3.1", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
 UI_TEXTS = {
-    "English": {
-        "sidebar_title": "⚙️ Settings & Auth",
-        "sidebar_api_label": "Groq API Key (Free)",
-        "sidebar_test_header": "🧪 Test Mode (Offline)",
-        "sidebar_test_checkbox": "Activate Test Mode (No API)",
-        "sidebar_test_desc": "Simulates a rich campaign without consuming API calls.",
-        "sidebar_lang_header": "🌐 App Language (UI)",
-        "title": "AI Social Media Hub",
-        "subtitle": "Transform any raw subject into a high-impact multi-platform campaign.",
-        "topic_label": "🎯 Campaign Subject / Main Idea:",
-        "topic_placeholder": "Ex: AI Workflow Automation in Remote Teams",
-        "lang_label": "🌐 Output Content Language",
-        "tone_label": "⚡ Campaign Tone",
-        "image_checkbox": "🎨 Generate Campaign Image (Free)",
-        "generate_btn": "✨ Generate Content Package",
-        "spinner_text": "Processing campaign strategy (via Groq)...",
-        "spinner_image": "Generating stunning visuals (via Pollinations)...",
-        "success": "🎉 Campaign generated successfully!",
-        "results_header": "📱 Campaign Results",
-        "download_btn": "📥 Download Campaign (.txt)",
-        "download_img_btn": "🖼️ Download Image (.jpg)",
-        "err_topic": "⚠️ Please enter a valid subject before generating.",
-        "err_auth": "⚠️ Please open the sidebar and enter your Groq API key.",
-        "err_gen": "⚠️ Error generating content:"
-    },
     "Română": {
-        "sidebar_title": "⚙️ Setări & Autentificare",
-        "sidebar_api_label": "Cheie API Groq (Gratuit)",
-        "sidebar_test_header": "🧪 Mod de Test (Offline)",
-        "sidebar_test_checkbox": "Activează Test Mode (Fără API)",
-        "sidebar_test_desc": "Simulează o campanie bogată fără a consuma cereri API.",
-        "sidebar_lang_header": "🌐 Limba Interfeței (UI)",
-        "title": "AI Social Media Hub",
-        "subtitle": "Transformă orice subiect brut într-o campanie multi-platformă de impact.",
-        "topic_label": "🎯 Subiectul campaniei / Ideea principală:",
-        "topic_placeholder": "Ex: AI Workflow Automation in Remote Teams",
-        "lang_label": "🌐 Limba de ieșire (Conținut)",
+        "app_title": "AI Social Media Hub v3.1",
+        "app_sub": "Platformă Enterprise de Generare Campanii Multi-Platformă",
+        "tab_generator": "🚀 Generator Campanii",
+        "tab_settings": "⚙️ Panou de Setări & Preferințe",
+        "tab_history": "📜 Istoric Campanii",
+        "input_label": "🔗 Subiect sau URL Articol:",
+        "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul AI-ului în medicină",
+        "lang_label": "🌐 Limba Conținutului",
         "tone_label": "⚡ Tonul Campaniei",
-        "image_checkbox": "🎨 Generează Imagine (Gratuit)",
-        "generate_btn": "✨ Generează Pachetul de Conținut",
-        "spinner_text": "Se procesează strategia campaniei (via Groq)...",
-        "spinner_image": "Se generează elementele vizuale (via Pollinations)...",
-        "success": "🎉 Campania a fost generată cu succes!",
-        "results_header": "📱 Rezultate Campanie",
-        "download_btn": "📥 Descarcă Campania (.txt)",
-        "download_img_btn": "🖼️ Descarcă Imaginea (.jpg)",
-        "err_topic": "⚠️ Te rog să introduci un subiect valid înainte de generare.",
-        "err_auth": "⚠️ Deschide meniul lateral și introdu cheia API Groq.",
-        "err_gen": "⚠️️ Eroare la generarea conținutului:"
+        "toggle_img": "🎨 Generare Imagine (FLUX AI)",
+        "btn_gen": "✨ Generează Campania (Live Streaming)",
+        "spinner_scrape": "🌍 Extragem conținutul de pe web...",
+        "spinner_text": "✍️ Se generează strategia de conținut...",
+        "spinner_img": "🎨 Generăm vizualul cu modelul FLUX.1-schnell...",
+        "success_scrape": "✅ Articol citit cu succes!",
+        "results": "📱 Rezultate Campanie",
+        "settings_header": "Parametri Vizuali și de Sistem",
+        "font_size_label": "🔤 Dimensiune Text în Postări",
+        "ui_lang_label": "🌐 Limba Interfeței (UI)",
+        "history_empty": "Nu există campanii salvate în istoricul sesiunii."
     },
-    "Français": {
-        "sidebar_title": "⚙️ Paramètres & Auth",
-        "sidebar_api_label": "Clé API Groq (Gratuit)",
-        "sidebar_test_header": "🧪 Mode Test (Hors ligne)",
-        "sidebar_test_checkbox": "Activer le mode test (Sans API)",
-        "sidebar_test_desc": "Simule une campagne sans appels API.",
-        "sidebar_lang_header": "🌐 Langue de l'interface (UI)",
-        "title": "AI Social Media Hub",
-        "subtitle": "Transformez n'importe quel sujet brut en une campagne à fort impact.",
-        "topic_label": "🎯 Sujet de la campagne :",
-        "topic_placeholder": "Ex: Automatisation des flux IA",
-        "lang_label": "🌐 Langue du contenu de sortie",
-        "tone_label": "⚡ Ton de la campagne",
-        "image_checkbox": "🎨 Générer une image (Gratuit)",
-        "generate_btn": "✨ Générer le package",
-        "spinner_text": "Traitement de la stratégie...",
-        "spinner_image": "Génération de visuels...",
-        "success": "🎉 Campagne générée avec succès !",
-        "results_header": "📱 Résultats",
-        "download_btn": "📥 Télécharger la campagne (.txt)",
-        "download_img_btn": "🖼️ Télécharger l'image (.jpg)",
-        "err_topic": "⚠️ Veuillez entrer un sujet valide.",
-        "err_auth": "⚠️ Veuillez entrer votre clé API Groq.",
-        "err_gen": "⚠️ Erreur :"
-    },
-    "Deutsch": {
-        "sidebar_title": "⚙️ Einstellungen",
-        "sidebar_api_label": "Groq API-Schlüssel",
-        "sidebar_test_header": "🧪 Testmodus",
-        "sidebar_test_checkbox": "Testmodus aktivieren",
-        "sidebar_test_desc": "Simuliert eine Kampagne ohne API.",
-        "sidebar_lang_header": "🌐 App-Sprache (UI)",
-        "title": "AI Social Media Hub",
-        "subtitle": "Verwandeln Sie jedes Thema in eine wirkungsvolle Kampagne.",
-        "topic_label": "🎯 Kampagnenthema:",
-        "topic_placeholder": "Bsp.: KI-Automatisierung",
-        "lang_label": "🌐 Zielsprache für Inhalte",
-        "tone_label": "⚡ Kampagnenton",
-        "image_checkbox": "🎨 Kampagnenbild generieren",
-        "generate_btn": "✨ Inhaltspaket generieren",
-        "spinner_text": "Kampagnenstrategie wird verarbeitet...",
-        "spinner_image": "Visuals werden erstellt...",
-        "success": "🎉 Kampagne erfolgreich generiert!",
-        "results_header": "📱 Ergebnisse",
-        "download_btn": "📥 Text herunterladen (.txt)",
-        "download_img_btn": "🖼️ Bild herunterladen (.jpg)",
-        "err_topic": "⚠️ Bitte ein Thema eingeben.",
-        "err_auth": "⚠️ Bitte Groq API-Schlüssel eingeben.",
-        "err_gen": "⚠️ Fehler:"
-    },
-    "Español": {
-        "sidebar_title": "⚙️ Configuración",
-        "sidebar_api_label": "Clave API Groq",
-        "sidebar_test_header": "🧪 Modo de Prueba",
-        "sidebar_test_checkbox": "Activar modo de prueba",
-        "sidebar_test_desc": "Simula una campaña sin consumir API.",
-        "sidebar_lang_header": "🌐 Idioma de la interfaz",
-        "title": "AI Social Media Hub",
-        "subtitle": "Transforma cualquier tema en una campaña de alto impacto.",
-        "topic_label": "🎯 Tema de la campaña:",
-        "topic_placeholder": "Ej: Automatización de IA",
-        "lang_label": "🌐 Idioma de contenido",
-        "tone_label": "⚡ Tono de la campaña",
-        "image_checkbox": "🎨 Generar imagen (Gratis)",
-        "generate_btn": "✨ Generar paquete",
-        "spinner_text": "Procesando estrategia...",
-        "spinner_image": "Generando imagen...",
-        "success": "🎉 ¡Campaña generada!",
-        "results_header": "📱 Resultados",
-        "download_btn": "📥 Descargar texto (.txt)",
-        "download_img_btn": "🖼️ Descargar Imagen (.jpg)",
-        "err_topic": "⚠️️ Introduce un tema válido.",
-        "err_auth": "⚠️ Introduce tu clave API Groq.",
-        "err_gen": "⚠️ Error:"
+    "English": {
+        "app_title": "AI Social Media Hub v3.1",
+        "app_sub": "Enterprise Multi-Platform Campaign Generator",
+        "tab_generator": "🚀 Campaign Generator",
+        "tab_settings": "⚙️ Settings & Preferences",
+        "tab_history": "📜 Campaign History",
+        "input_label": "🔗 Subject or Article URL:",
+        "input_placeholder": "Ex: https://techcrunch.com/... OR Future of AI in medicine",
+        "lang_label": "🌐 Content Language",
+        "tone_label": "⚡ Campaign Tone",
+        "toggle_img": "🎨 Generate Image (FLUX AI)",
+        "btn_gen": "✨ Generate Campaign (Live Streaming)",
+        "spinner_scrape": "🌍 Extracting web content...",
+        "spinner_text": "✍ Generating content strategy...",
+        "spinner_img": "🎨 Rendering visual with FLUX.1-schnell...",
+        "success_scrape": "✅ Article parsed successfully!",
+        "results": "📱 Campaign Results",
+        "settings_header": "Visual and System Parameters",
+        "font_size_label": "🔤 Post Text Font Size",
+        "ui_lang_label": "🌐 Interface Language (UI)",
+        "history_empty": "No campaigns saved in the session history."
     }
 }
 
 # ==========================================
-# MENIU LATERAL & STARE (Sidebar)
+# 4. GESTIONARE STATE & PREFERINȚE
 # ==========================================
 
-st.sidebar.header(UI_TEXTS["English"]["sidebar_title"]) # Header fix pentru a rula corect inainte de selectia limbii
-ui_language = st.sidebar.selectbox(
-    "🌐 App Language (UI)",
-    ["English", "Română", "Français", "Deutsch", "Español"],
-    index=0
-)
-t = UI_TEXTS[ui_language] # Incarcam traducerile alese
+if "ui_lang" not in st.session_state:
+    st.session_state.ui_lang = "Română"
+if "font_size" not in st.session_state:
+    st.session_state.font_size = "Normal (15px)"
+if "generated" not in st.session_state:
+    st.session_state.generated = False
+if "current_posts" not in st.session_state:
+    st.session_state.current_posts = {"linkedin": "", "twitter": "", "instagram": "", "img_prompt": ""}
+if "image_bytes" not in st.session_state:
+    st.session_state.image_bytes = None
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-api_key_input = st.sidebar.text_input(t["sidebar_api_label"], type="password")
-api_key = api_key_input if api_key_input else os.environ.get("GROQ_API_KEY")
+t = UI_TEXTS[st.session_state.ui_lang]
 
-st.sidebar.markdown("---")
-st.sidebar.header(t["sidebar_test_header"])
-test_mode = st.sidebar.checkbox(t["sidebar_test_checkbox"], value=False)
-st.sidebar.markdown(t["sidebar_test_desc"])
+font_size_map = {
+    "Compact (13px)": "13px",
+    "Normal (15px)": "15px",
+    "Large (18px)": "18px"
+}
+active_font_size = font_size_map.get(st.session_state.font_size, "15px")
+
+st.markdown(f"""
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+    html, body, [class*="css"] {{ font-family: 'Inter', sans-serif !important; }}
+    .stTextInput input, .stSelectbox select {{
+        background-color: #f8fafc !important; border: 2px solid #e2e8f0 !important;
+        border-radius: 12px !important; padding: 0.8rem !important; transition: 0.3s;
+    }}
+    .stTextInput input:focus {{ border-color: #3b82f6 !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.2) !important; }}
+    .stButton button {{
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+        color: white; font-weight: bold; border-radius: 12px; padding: 0.8rem; border: none; width: 100%;
+    }}
+    .mockup-container {{
+        background: white; border-radius: 16px; padding: 24px; margin-bottom: 24px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;
+        color: #0f172a; font-size: {active_font_size} !important; line-height: 1.6;
+    }}
+    .mockup-header {{ display: flex; align-items: center; margin-bottom: 16px; }}
+    .mockup-avatar {{ width: 48px; height: 48px; border-radius: 50%; background: #e2e8f0; margin-right: 12px; }}
+    .mockup-name {{ font-weight: 700; font-size: 16px; margin: 0; padding: 0; }}
+    .mockup-meta {{ font-size: 13px; color: #64748b; margin: 0; }}
+    .brand-linkedin {{ border-top: 4px solid #0a66c2; }}
+    .brand-twitter {{ border-top: 4px solid #000000; }}
+    .brand-instagram {{ border-top: 4px solid #e1306c; }}
+    .mockup-content {{ white-space: pre-wrap; }}
+    </style>
+""", unsafe_allow_html=True)
 
 # ==========================================
-# INTERFAȚA PRINCIPALĂ (Main Body)
+# 5. NAVIGARE PRINCIPALĂ PE TAB-URI
 # ==========================================
 
-st.markdown("<div style='text-align: center; margin-top: 1rem;'>", unsafe_allow_html=True)
-st.markdown(f"<h1 style='font-size: 2.25rem; font-weight: 700; margin-bottom: 0.5rem; background: linear-gradient(135deg, #818cf8 0%, #22d3ee 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>{t['title']}</h1>", unsafe_allow_html=True)
-st.markdown(f"<p style='color: #94a3b8; font-size: 1rem; margin-bottom: 2rem;'>{t['subtitle']}</p>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
+tab_gen, tab_settings, tab_history = st.tabs([t["tab_generator"], t["tab_settings"], t["tab_history"]])
 
-topic_input = st.text_input(t['topic_label'], placeholder=t['topic_placeholder'])
+# --- TAB 1: GENERATOR ---
+with tab_gen:
+    st.markdown(f"<h1 style='text-align:center; font-weight:800; color:#0f172a;'>{t['app_title']}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center; color:#64748b; margin-bottom:2.5rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
-with col1:
-    language_choice = st.selectbox(
-        t['lang_label'],
-        ["English", "Română", "Français", "Deutsch", "Español"]
-    )
-with col2:
-    tone_choice = st.selectbox(
-        t['tone_label'],
-        ["Professional & Analytical", "Casual & Engaging", "Bold & Provocative", "Educational & Structured"]
-    )
+    input_col, controls_col = st.columns([2, 1])
+    with input_col:
+        topic_input = st.text_input(t['input_label'], placeholder=t['input_placeholder'])
 
-generate_image_cb = st.checkbox(t['image_checkbox'], value=True)
-st.markdown("<br>", unsafe_allow_html=True)
-generate_btn = st.button(t['generate_btn'])
+    with controls_col:
+        lang = st.selectbox(t['lang_label'], ["Română", "English", "Français", "Deutsch"])
+        tone = st.selectbox(t['tone_label'], ["Profesional & Analitic", "Casual & Prietenos", "Provocator", "Educațional"])
+        generate_image_toggle = st.toggle(t['toggle_img'], value=True)
 
-# ==========================================
-# EXECUȚIE ȘI REZULTATE
-# ==========================================
+    generate_btn = st.button(t['btn_gen'])
 
-if generate_btn:
-    if not topic_input.strip():
-        st.warning(t['err_topic'])
-    elif not test_mode and not api_key:
-        st.error(t['err_auth'])
-    else:
-        response_text = ""
-        image_bytes = None
-        
-        # 1. GENERARE TEXT
-        with st.spinner(t['spinner_text']):
-            try:
-                if test_mode:
-                    time.sleep(0.5)
-                    response_text = f"### 📊 LINKEDIN\n[Test Mode] Campanie despre {topic_input} in limba {language_choice} cu ton {tone_choice}.\n\n### 🧵 X (TWITTER)\n[Test Mode] Thread de test."
+    if generate_btn:
+        if not topic_input.strip():
+            st.warning("⚠️ Te rog să introduci un subiect valid sau un link.")
+        elif not GROQ_API_KEY:
+            st.error("⚠️ Lipsă cheie API Groq în setările serverului (Streamlit Secrets).")
+        else:
+            st.session_state.generated = False
+            st.session_state.image_bytes = None
+            context_data = topic_input
+            
+            is_url = re.match(r"^https?://", topic_input.strip())
+            if is_url:
+                with st.spinner(t['spinner_scrape']):
+                    try:
+                        context_data = scrape_url_content(topic_input.strip())
+                        st.success(t['success_scrape'])
+                    except Exception as e:
+                        st.error(str(e))
+                        st.stop()
+
+            st.markdown(f"### {t['spinner_text']}")
+            stream_container = st.empty()
+            
+            user_prompt = f"SUBJECT OR CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
+            full_response = ""
+            
+            for chunk in stream_groq_text(user_prompt, GROQ_API_KEY):
+                full_response += chunk
+                stream_container.markdown(full_response + "▌")
+                
+            stream_container.empty()
+
+            def extract_section(text, start_tag, end_tag=None):
+                pattern = f"{re.escape(start_tag)}(.*?){re.escape(end_tag)}" if end_tag else f"{re.escape(start_tag)}(.*)"
+                match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+                return match.group(1).strip() if match else ""
+
+            li_post = extract_section(full_response, "[LINKEDIN]", "[TWITTER]")
+            tw_post = extract_section(full_response, "[TWITTER]", "[INSTAGRAM]")
+            ig_post = extract_section(full_response, "[INSTAGRAM]", "[IMG_PROMPT]")
+            img_prompt = extract_section(full_response, "[IMG_PROMPT]")
+
+            if not li_post: li_post = full_response
+            if not img_prompt: img_prompt = f"Professional corporate illustration of {topic_input}, 8k, modern aesthetic"
+
+            st.session_state.current_posts = {"linkedin": li_post, "twitter": tw_post, "instagram": ig_post, "img_prompt": img_prompt}
+
+            if generate_image_toggle:
+                if not HUGGINGFACE_API_KEY:
+                    st.warning("⚠️ Toggle-ul de imagine este activ, dar lipsește 'HUGGINGFACE_API_KEY' în Secrets.")
                 else:
-                    prompt = (
-                        f'Create a comprehensive multi-platform content package for the following topic: "{topic_input}".\n\n'
-                        "CRITICAL INSTRUCTIONS:\n"
-                        f"- Output Language: STRICTLY {language_choice}. Do not mix languages.\n"
-                        f"- Tone & Style: {tone_choice}.\n\n"
-                        "Structure into 3 sections using markdown headings: 1. LINKEDIN 2. X (TWITTER) 3. INSTAGRAM."
-                    )
-                    response_text = generate_text_groq(prompt, api_key)
-            except Exception as e:
-                st.error(f"{t['err_gen']} {str(e)}")
-
-        # 2. GENERARE IMAGINE (Daca e bifat si avem text valid)
-        if generate_image_cb and response_text:
-            with st.spinner(t['spinner_image']):
-                try:
-                    if test_mode:
-                        req = requests.get("https://picsum.photos/1280/720")
-                        image_bytes = req.content
-                    else:
-                        image_bytes = generate_image_pollinations(f"{topic_input} - {tone_choice} style")
-                except Exception as e:
-                    st.warning(f"Imaginea nu a putut fi generată, dar textul este gata. Detalii: {str(e)}")
-
-        # 3. AFIȘARE REZULTATE
-        if response_text:
-            st.success(t['success'])
-            st.markdown(f"### {t['results_header']}")
-            st.markdown(response_text)
+                    with st.spinner(t['spinner_img']):
+                        try:
+                            st.session_state.image_bytes = generate_image_huggingface(img_prompt, HUGGINGFACE_API_KEY)
+                        except Exception as e:
+                            st.error(f"Eroare la generarea imaginii: {str(e)}")
+                            
+            st.session_state.generated = True
             
-            if image_bytes:
+            # Adăugăm în istoricul sesiunii
+            st.session_state.history.insert(0, {
+                "topic": topic_input,
+                "posts": st.session_state.current_posts,
+                "image": st.session_state.image_bytes
+            })
+            st.rerun()
+
+    # Afișare rezultate curente
+    if st.session_state.generated:
+        st.markdown("---")
+        st.markdown(f"## {t['results']}")
+        
+        col_viz, col_posts = st.columns([1.2, 2])
+        
+        with col_viz:
+            st.markdown("#### 🖼️ Vizual Generat")
+            if st.session_state.image_bytes:
+                st.image(st.session_state.image_bytes, use_container_width=True)
+                st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.image_bytes, "campanie_vizual.jpg", "image/jpeg")
+            else:
+                st.info("Generarea de imagini a fost oprită sau indisponibilă.")
+                
+            st.markdown("<br><b>Promptul vizual creat de AI:</b>", unsafe_allow_html=True)
+            st.caption(st.session_state.current_posts['img_prompt'])
+
+        with col_posts:
+            st.markdown(f"""
+            <div class="mockup-container brand-linkedin">
+                <div class="mockup-header">
+                    <div class="mockup-avatar"></div>
+                    <div><p class="mockup-name">Professional Profile</p><p class="mockup-meta">Acum • 🌍</p></div>
+                </div>
+                <div class="mockup-content">{st.session_state.current_posts['linkedin']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.session_state.current_posts['twitter']:
+                st.markdown(f"""
+                <div class="mockup-container brand-twitter">
+                    <div class="mockup-header">
+                        <div class="mockup-avatar" style="border-radius:10px;"></div>
+                        <div><p class="mockup-name">Brand Account <span style="color:#1d9bf0;">✔</span></p><p class="mockup-meta">@brand_hub • 1m</p></div>
+                    </div>
+                    <div class="mockup-content">{st.session_state.current_posts['twitter']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            if st.session_state.current_posts['instagram']:
+                st.markdown(f"""
+                <div class="mockup-container brand-instagram">
+                    <div class="mockup-header">
+                        <div class="mockup-avatar"></div>
+                        <div><p class="mockup-name">social_hub_official</p></div>
+                    </div>
+                    <div class="mockup-content"><b>social_hub_official</b> {st.session_state.current_posts['instagram']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            full_export_text = (
+                f"=== LINKEDIN ===\n{st.session_state.current_posts['linkedin']}\n\n"
+                f"=== TWITTER ===\n{st.session_state.current_posts['twitter']}\n\n"
+                f"=== INSTAGRAM ===\n{st.session_state.current_posts['instagram']}\n\n"
+                f"=== IMG PROMPT ===\n{st.session_state.current_posts['img_prompt']}"
+            )
+            st.download_button("📦 Descarcă Toate Postările (.txt)", data=full_export_text, file_name="pachet_campanie_complet.txt", mime="text/plain")
+
+
+# --- TAB 2: SETĂRI ȘI PREFERINȚE ---
+with tab_settings:
+    st.markdown(f"<h2>{t['tab_settings']}</h2>", unsafe_allow_html=True)
+    st.markdown(f"<p>{t['settings_header']}</p><br>", unsafe_allow_html=True)
+    
+    st.session_state.ui_lang = st.selectbox(
+        t['ui_lang_label'], 
+        ["Română", "English"], 
+        index=0 if st.session_state.ui_lang == "Română" else 1
+    )
+    
+    st.session_state.font_size = st.selectbox(
+        t['font_size_label'], 
+        ["Compact (13px)", "Normal (15px)", "Large (18px)"],
+        index=1
+    )
+    
+    st.success("✨ Setările sunt aplicate instantaneu în toată aplicația.")
+
+
+# --- TAB 3: ISTORIC CAMPANII ---
+with tab_history:
+    st.markdown(f"<h2>{t['tab_history']}</h2><br>", unsafe_allow_html=True)
+    
+    if not st.session_state.history:
+        st.info(t['history_empty'])
+    else:
+        for idx, item in enumerate(st.session_state.history):
+            with st.expander(f"📁 Campania #{len(st.session_state.history) - idx}: {item['topic']}"):
+                st.markdown(f"**Subiect / Link:** {item['topic']}")
                 st.markdown("---")
-                st.image(image_bytes, caption=f"Generated for: {topic_input}", use_container_width=True)
-            
-            st.markdown("---")
-            dl_col1, dl_col2 = st.columns(2)
-            with dl_col1:
-                st.download_button(
-                    label=t['download_btn'],
-                    data=response_text,
-                    file_name=f"social_campaign_{language_choice.lower()}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            with dl_col2:
-                if image_bytes:
-                    st.download_button(
-                        label=t['download_img_btn'],
-                        data=image_bytes,
-                        file_name="campaign_img.jpg",
-                        mime="image/jpeg",
-                        use_container_width=True
-                    )
-
-st.markdown("---")
-st.markdown("<p style='text-align: center; color: #64748b; font-size: 12px;'>Fast Engine R&D • Powered by Groq & Pollinations.ai</p>", unsafe_allow_html=True)
+                st.markdown(item['posts']['linkedin'])
+                if item['image']:
+                    st.image(item['image'], width=400)
