@@ -190,7 +190,7 @@ else:
     """
 
 # ==========================================
-# 4. INJECTARE CSS SIGURĂ (CU TAG-URI <style> EXPLICITE)
+# 4. INJECTARE CSS SIGURĂ
 # ==========================================
 
 st.markdown("""
