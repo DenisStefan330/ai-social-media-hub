@@ -107,7 +107,7 @@ if "current_topic" not in st.session_state:
 UI_TEXTS = {
     "Română": {
         "app_title": "AI Social Media Hub",
-        "app_sub": "Platformă Enterprise de Generare Campanii Multi-Platformă",
+        "app_sub": "Platformă Enterprise de Generare Conținut Multi-Platformă",
         "input_label": "🔗 Subiect sau URL Articol:",
         "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul AI-ului în medicină",
         "lang_label": "🌐 Limba Conținutului",
@@ -120,11 +120,13 @@ UI_TEXTS = {
         "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
         "theme_label": "🌓 Mod Temă (Light / Dark)",
-        "save_close": "Salvează & Închide"
+        "save_close": "Salvează & Închide",
+        "copy_btn": "📋 Copiază textul",
+        "copied": "Copiat! ✨"
     },
     "English": {
         "app_title": "AI Social Media Hub",
-        "app_sub": "Enterprise Multi-Platform Campaign Generator",
+        "app_sub": "Enterprise Multi-Platform Content Generator",
         "input_label": "🔗 Subject or Article URL:",
         "input_placeholder": "Ex: https://techcrunch.com/... OR Future of AI in medicine",
         "lang_label": "🌐 Content Language",
@@ -137,7 +139,9 @@ UI_TEXTS = {
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
         "theme_label": "🌓 Theme Mode (Light / Dark)",
-        "save_close": "Save & Close"
+        "save_close": "Save & Close",
+        "copy_btn": "📋 Copy text",
+        "copied": "Copied! ✨"
     }
 }
 
@@ -150,7 +154,6 @@ font_size_map = {
 }
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
-# Determinare regulă temă de fundal
 theme_background_rule = ""
 if st.session_state.theme_mode == "Light (Mod Luminos)":
     theme_background_rule = """
@@ -187,10 +190,9 @@ else:
     """
 
 # ==========================================
-# 4. ARHITECTURĂ CSS CURATĂ (FĂRĂ CONFLICTE DE SINTAXĂ)
+# 4. INJECTARE CSS ROBUST ȘI COMPONENTĂ COPY
 # ==========================================
 
-# 1. Stiluri statice sigure (fără acolade Python care să corupă șirul)
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -240,6 +242,7 @@ st.markdown("""
         line-height: 1.6;
         animation: fadeInUp 0.5s ease-out forwards;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
+        position: relative;
     }
     .mockup-container:hover {
         transform: translateY(-3px);
@@ -252,11 +255,29 @@ st.markdown("""
     .brand-linkedin { border-top: 4px solid #0a66c2; }
     .brand-twitter { border-top: 4px solid #38bdf8; }
     .brand-instagram { border-top: 4px solid #e1306c; }
-    .mockup-content { white-space: pre-wrap; }
+    .mockup-content { white-space: pre-wrap; margin-bottom: 1rem; }
+    
+    /* Stil pentru butonul intern de copiere clipboard */
+    .copy-clipboard-btn {
+        background: rgba(59, 130, 246, 0.1);
+        color: #2563eb;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .copy-clipboard-btn:hover {
+        background: rgba(59, 130, 246, 0.2);
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Injectare controlată a variabilelor dinamice (font size și temă) prin CSS Custom Properties
 dynamic_css = f"""
 <style>
 :root {{
@@ -419,7 +440,7 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE ȘI MOCKUPS
+# 9. AFIȘARE REZULTATE CU CLIPBOARD INTEGRAT
 # ==========================================
 
 if st.session_state.current_posts:
@@ -440,37 +461,52 @@ if st.session_state.current_posts:
         st.caption(st.session_state.current_posts['img_prompt'])
 
     with col_posts:
-        st.markdown(f"""
-        <div class="mockup-container brand-linkedin">
-            <div class="mockup-header">
-                <div class="mockup-avatar"></div>
-                <div><p class="mockup-name">Professional Profile</p><p class="mockup-meta">Acum • 🌍</p></div>
+        # Funcție helper pentru randarea mochetei cu buton JavaScript de copiere în clipboard
+        def render_social_mockup(platform_name, brand_class, avatar_radius, author_title, author_meta, post_text):
+            safe_text_js = post_text.replace("`", "\\`").replace('"', '\\"').replace("\n", "\\n")
+            html_code = f"""
+            <div class="mockup-container {brand_class}">
+                <div class="mockup-header">
+                    <div class="mockup-avatar" style="border-radius: {avatar_radius};"></div>
+                    <div>
+                        <p class="mockup-name">{author_title}</p>
+                        <p class="mockup-meta">{author_meta}</p>
+                    </div>
+                </div>
+                <div class="mockup-content">{post_text}</div>
+                <button class="copy-clipboard-btn" onclick="navigator.clipboard.writeText(`{safe_text_js}`).then(() => {{ 
+                    this.innerText = '{t['copied']}'; 
+                    setTimeout(() => {{ this.innerText = '{t['copy_btn']}'; }}, 2000); 
+                }});">
+                    {t['copy_btn']}
+                </button>
             </div>
-            <div class="mockup-content">{st.session_state.current_posts['linkedin']}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            """
+            st.markdown(html_code, unsafe_allow_html=True)
+
+        # Randare card LinkedIn
+        render_social_mockup(
+            "LinkedIn", "brand-linkedin", "50%", 
+            "Professional Profile", "Acum • 🌍", 
+            st.session_state.current_posts['linkedin']
+        )
         
+        # Randare card Twitter / X
         if st.session_state.current_posts['twitter']:
-            st.markdown(f"""
-            <div class="mockup-container brand-twitter">
-                <div class="mockup-header">
-                    <div class="mockup-avatar" style="border-radius:10px;">}</div>
-                    <div><p class="mockup-name">Brand Account <span style="color:#38bdf8;">✔</span></p><p class="mockup-meta">@brand_hub • 1m</p></div>
-                </div>
-                <div class="mockup-content">{st.session_state.current_posts['twitter']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            render_social_mockup(
+                "Twitter", "brand-twitter", "10px", 
+                'Brand Account <span style="color:#38bdf8;">✔</span>', "@brand_hub • 1m", 
+                st.session_state.current_posts['twitter']
+            )
             
+        # Randare card Instagram
         if st.session_state.current_posts['instagram']:
-            st.markdown(f"""
-            <div class="mockup-container brand-instagram">
-                <div class="mockup-header">
-                    <div class="mockup-avatar"></div>
-                    <div><p class="mockup-name">social_hub_official</p></div>
-                </div>
-                <div class="mockup-content"><b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            ig_content = f"<b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}"
+            render_social_mockup(
+                "Instagram", "brand-instagram", "50%", 
+                "social_hub_official", "Instagram Post", 
+                ig_content
+            )
 
         full_export = (
             f"=== LINKEDIN ===\n{st.session_state.current_posts['linkedin']}\n\n"
