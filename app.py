@@ -89,6 +89,10 @@ st.set_page_config(
 
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
+if "font_size" not in st.session_state:
+    st.session_state.font_size = "Normal (15px)"
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Sincronizat cu sistemul (Auto)"
 if "history" not in st.session_state:
     st.session_state.history = []
 if "current_posts" not in st.session_state:
@@ -111,7 +115,9 @@ UI_TEXTS = {
         "sidebar_title": "💬 Istoric Postări",
         "new_chat": "➕ Postare Nouă",
         "settings_title": "⚙️ Setări & Preferințe",
+        "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
+        "theme_label": "🌓 Mod Temă (Light / Dark)",
         "save_close": "Salvează & Închide"
     },
     "English": {
@@ -126,7 +132,9 @@ UI_TEXTS = {
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
         "settings_title": "⚙️ Settings & Preferences",
+        "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
+        "theme_label": "🌓 Theme Mode (Light / Dark)",
         "save_close": "Save & Close"
     }
 }
@@ -134,17 +142,29 @@ UI_TEXTS = {
 t = UI_TEXTS[st.session_state.ui_lang]
 
 # ==========================================
-# 4. MODALUL DE SETĂRI NATIV (SIMPLIFICAT)
+# 4. MODALUL DE SETĂRI NATIV (ST.DIALOG)
 # ==========================================
 
 @st.dialog(t['settings_title'])
 def settings_modal():
-    st.markdown("Configurează limba interfeței:")
+    st.markdown("Configurează preferințele de sistem și afișare:")
     
     st.session_state.ui_lang = st.selectbox(
         t['ui_lang_label'], 
         ["Română", "English"], 
         index=0 if st.session_state.ui_lang == "Română" else 1
+    )
+    
+    st.session_state.font_size = st.selectbox(
+        t['font_size_label'], 
+        ["Compact (13px)", "Normal (15px)", "Large (18px)"],
+        index=1 if st.session_state.font_size == "Normal (15px)" else (0 if "Compact" in st.session_state.font_size else 2)
+    )
+
+    st.session_state.theme_mode = st.selectbox(
+        t['theme_label'],
+        ["Sincronizat cu sistemul (Auto)", "Light (Mod Luminos)", "Dark (Mod Întunecat)"],
+        index=0 if st.session_state.theme_mode == "Sincronizat cu sistemul (Auto)" else (1 if "Light" in st.session_state.theme_mode else 2)
     )
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -202,7 +222,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
@@ -256,7 +276,7 @@ if generate_btn:
         }
 
         if generate_image_toggle and HUGGINGFACE_API_KEY:
-            with st.spinner("🎨 Se generează imaginea prin Hugging Face FLUX..."):
+            with st.spinner("🎨 Se generează imaginea FLUX..."):
                 try:
                     st.session_state.current_image = generate_image_huggingface(img_prompt, HUGGINGFACE_API_KEY)
                 except Exception as e:
@@ -280,7 +300,7 @@ if st.session_state.current_posts:
     col_viz, col_posts = st.columns([1.2, 2])
     
     with col_viz:
-        st.markdown("#### 🖼️ Vizual Generat (FLUX)")
+        st.markdown("#### 🖼️️ Vizual Generat")
         if st.session_state.current_image:
             st.image(st.session_state.current_image, use_container_width=True)
             st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.current_image, "campanie.jpg", "image/jpeg")
