@@ -3,6 +3,7 @@ import requests
 import re
 from bs4 import BeautifulSoup
 import streamlit as st
+import groq
 
 # ==========================================
 # 1. GESTIONARE SECURE A CHEILOR API
@@ -36,8 +37,10 @@ def scrape_url_content(url: str) -> str:
         raise Exception(f"Eroare la citirea link-ului: {str(e)}")
 
 def stream_groq_text(prompt: str, api_key: str):
-    from groq import Groq
-    client = Groq(api_key=api_key)
+    if not api_key or not api_key.startswith("gsk_"):
+        raise Exception("Cheia Groq API este invalidă sau lipsește. Verifică în setările de pe Streamlit Cloud dacă ai setat corect 'GROQ_API_KEY' (trebuie să înceapă cu 'gsk_').")
+
+    client = groq.Groq(api_key=api_key)
     system_prompt = (
         "You are an elite Social Media Copywriter and Content Strategist. "
         "Create viral, insightful posts based on the user's topic or provided article text. "
@@ -49,7 +52,8 @@ def stream_groq_text(prompt: str, api_key: str):
         "[IMG_PROMPT]\n...1 highly detailed professional visual prompt in English for FLUX...\n"
         "2. Avoid generic fluff; use strong hooks."
     )
-    # Încercăm cu modelul principal actualizat
+    
+    # Încercăm modelul principal
     try:
         stream = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -59,8 +63,9 @@ def stream_groq_text(prompt: str, api_key: str):
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
-    except Exception as primary_err:
-        # Fallback la modelul rapid actualizat compatibil cu API-ul curent Groq
+                
+    except (groq.NotFoundError, groq.APIStatusError) as primary_err:
+        # Fallback la modelul rapid
         try:
             stream_fb = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
@@ -71,7 +76,7 @@ def stream_groq_text(prompt: str, api_key: str):
                 if chunk.choices[0].delta.content is not None:
                     yield chunk.choices[0].delta.content
         except Exception as fallback_err:
-            raise Exception(f"Eroare API Groq: {str(primary_err)}")
+            raise Exception(f"Eroare Groq API: Asigură-te că ai o cheie API validă și activă. Detalii: {str(primary_err)}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
@@ -227,7 +232,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
@@ -250,9 +255,13 @@ if generate_btn:
         user_prompt = f"SUBJECT/CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
         full_response = ""
         
-        for chunk in stream_groq_text(user_prompt, GROQ_API_KEY):
-            full_response += chunk
-            stream_container.markdown(full_response + "▌")
+        try:
+            for chunk in stream_groq_text(user_prompt, GROQ_API_KEY):
+                full_response += chunk
+                stream_container.markdown(full_response + "▌")
+        except Exception as api_err:
+            st.error(str(api_err))
+            st.stop()
             
         stream_container.empty()
 
@@ -306,7 +315,7 @@ if st.session_state.current_posts:
             st.image(st.session_state.current_image, use_container_width=True)
             st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.current_image, "campanie.jpg", "image/jpeg")
         else:
-            st.info("Imagine inactivă sau generare oprită.")
+            st.info("Imagine inactivă sau generare oprită. Verifică HUGGINGFACE_API_KEY în Secrets dacă dorești imagini.")
             
         st.markdown("<br><b>Prompt vizual AI:</b>", unsafe_allow_html=True)
         st.caption(st.session_state.current_posts['img_prompt'])
