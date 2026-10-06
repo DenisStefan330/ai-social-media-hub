@@ -9,20 +9,42 @@ import streamlit as st
 # FUNCȚII HELPER (Business Logic & API Calls)
 # ==========================================
 
-def generate_text_groq(prompt: str, api_key: str, model: str = "llama-3.3-70b-versatile") -> str:
-    # Folosim importul in-function pentru a evita crash-uri daca pachetul nu a terminat de instalat
-    from groq import Groq 
+
+def generate_text_groq(prompt: str, api_key: str) -> str:
+    from groq import Groq
     client = Groq(api_key=api_key)
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are an elite AI Social Media R&D Strategist."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=2048,
-    )
-    return completion.choices[0].message.content
+    
+    # Lista de modele, ordonata de la cel mai performant la fallback-uri stabile (Free Tier)
+    models_to_try = [
+        "llama-3.1-70b-versatile", # Modelul principal stabil
+        "llama-3.1-8b-instant",    # Extrem de rapid, fallback excelent
+        "mixtral-8x7b-32768"       # Model arhitectural diferit, foarte fiabil pe Groq
+    ]
+    
+    last_error = None
+    
+    # Incercam modelele secvential. Daca unul pica (ex: 404 sau Rate Limit), trecem la urmatorul.
+    for model_name in models_to_try:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are an elite AI Social Media R&D Strategist."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2048,
+            )
+            # Daca a reusit, returnam textul si oprim bucla
+            return completion.choices[0].message.content
+            
+        except Exception as e:
+            # Salvam eroarea si continuam bucla catre urmatorul model
+            last_error = str(e)
+            continue
+            
+    # Daca TOATE modelele au picat, abia atunci ridicam eroarea catre interfata Streamlit
+    raise Exception(f"Toate modelele au eșuat. Ultima eroare: {last_error}")
 
 def generate_image_pollinations(prompt: str, width: int = 1280, height: int = 720) -> bytes:
     # Optimizare: Adaugam 'high quality, professional' in engleza pentru a forta modelul vizual
