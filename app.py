@@ -93,8 +93,6 @@ if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
 if "font_size" not in st.session_state:
     st.session_state.font_size = "Normal (15px)"
-if "settings_open" not in st.session_state:
-    st.session_state.settings_open = False
 if "history" not in st.session_state:
     st.session_state.history = []
 if "current_posts" not in st.session_state:
@@ -114,12 +112,12 @@ UI_TEXTS = {
         "tone_label": "⚡ Tonul Campaniei",
         "toggle_img": "🎨 Generare Imagine (FLUX AI)",
         "btn_gen": "✨ Generează Campania",
-        "sidebar_title": "💬 Istoric Conversații",
-        "new_chat": "➕ Campanie Nouă",
+        "sidebar_title": "💬 Istoric Postări",
+        "new_chat": "➕ Postare Nouă",  # Actualizat pentru un ton mai dinamic și potrivit aplicației
         "settings_title": "⚙️ Setări & Preferințe",
         "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
-        "close": "Închide ✕"
+        "save_close": "Salvează & Închide"
     },
     "English": {
         "app_title": "AI Social Media Hub",
@@ -130,12 +128,12 @@ UI_TEXTS = {
         "tone_label": "⚡ Campaign Tone",
         "toggle_img": "🎨 Generate Image (FLUX AI)",
         "btn_gen": "✨ Generate Campaign",
-        "sidebar_title": "💬 Chat History",
-        "new_chat": "➕ New Campaign",
-        "settings_title": "⚙️️ Settings & Preferences",
+        "sidebar_title": "💬 Post History",
+        "new_chat": "➕ New Post",
+        "settings_title": "⚙️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
-        "close": "Close ✕"
+        "save_close": "Save & Close"
     }
 }
 
@@ -145,7 +143,7 @@ font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
 # ==========================================
-# 4. DESIGN CSS ADAPTIV & CORELLARE BUG INPUT
+# 4. DESIGN CSS CURAT
 # ==========================================
 
 st.markdown(f"""
@@ -155,20 +153,6 @@ st.markdown(f"""
         font-family: 'Inter', sans-serif !important;
     }}
     
-    /* Corectare bug bara albă / suprapunere pe input-uri */
-    .stTextInput input {{
-        background-color: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.3) !important;
-        border-radius: 12px !important;
-        padding: 0.75rem 1rem !important;
-    }}
-    .stTextInput input:focus {{
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
-    }}
-    
-    /* Buton Principal Gradient */
     .stButton button {{
         background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
         color: white !important;
@@ -184,7 +168,6 @@ st.markdown(f"""
         transform: translateY(-1px);
     }}
 
-    /* Carduri Mockup Social Media adaptabile Light/Dark Mode */
     .mockup-container {{
         background-color: var(--secondary-background-color);
         color: var(--text-color);
@@ -204,35 +187,35 @@ st.markdown(f"""
     .brand-twitter {{ border-top: 4px solid #38bdf8; }}
     .brand-instagram {{ border-top: 4px solid #e1306c; }}
     .mockup-content {{ white-space: pre-wrap; }}
-
-    /* Efect Backdrop Blur pentru Modalul de Setări */
-    .settings-backdrop {{
-        position: fixed;
-        top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        z-index: 999998;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }}
-    .settings-modal {{
-        background: var(--background-color);
-        color: var(--text-color);
-        padding: 2rem;
-        border-radius: 20px;
-        width: 90%;
-        max-width: 500px;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        border: 1px solid rgba(128,128,128,0.3);
-        z-index: 999999;
-    }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 5. BARA LATERALĂ (ISTORIC TIP CHATGPT)
+# 5. MODALUL DE SETĂRI NATIV (ST.DIALOG)
+# ==========================================
+
+@st.dialog(t['settings_title'])
+def settings_modal():
+    st.markdown("Configurează preferințele de sistem și afișare:")
+    
+    st.session_state.ui_lang = st.selectbox(
+        t['ui_lang_label'], 
+        ["Română", "English"], 
+        index=0 if st.session_state.ui_lang == "Română" else 1
+    )
+    
+    st.session_state.font_size = st.selectbox(
+        t['font_size_label'], 
+        ["Compact (13px)", "Normal (15px)", "Large (18px)"],
+        index=1 if st.session_state.font_size == "Normal (15px)" else (0 if "Compact" in st.session_state.font_size else 2)
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button(t['save_close'], use_container_width=True):
+        st.rerun()
+
+# ==========================================
+# 6. BARA LATERALĂ (ISTORIC POSTĂRI)
 # ==========================================
 
 with st.sidebar:
@@ -247,11 +230,10 @@ with st.sidebar:
     st.markdown("---")
     
     if not st.session_state.history:
-        st.caption("Nicio campanie salvată.")
+        st.caption("Nicio postare salvată în istoric.")
     else:
         for idx, item in enumerate(st.session_state.history):
-            # Denumirea după subiectul introdus (ca în ChatGPT)
-            title_label = item['topic'][:32] + "..." if len(item['topic']) > 32 else item['topic']
+            title_label = item['topic'][:30] + "..." if len(item['topic']) > 30 else item['topic']
             if st.button(f"💬 {title_label}", key=f"hist_{idx}", use_container_width=True):
                 st.session_state.current_posts = item['posts']
                 st.session_state.current_image = item['image']
@@ -259,55 +241,19 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# 6. HEADER CU ICONIȚĂ SETĂRI (ROTIȚĂ ⚙️)
+# 7. HEADER PRINCIPAL CU ICONIȚĂ ROTIȚĂ ⚙️
 # ==========================================
 
-head_col1, head_col2 = st.columns([10, 1])
+head_col1, head_col2 = st.columns([11, 1])
 with head_col1:
     st.markdown(f"<h2 style='margin:0; font-weight:800;'>{t['app_title']}</h2>", unsafe_allow_html=True)
     st.markdown(f"<p style='opacity:0.7; margin-bottom:1.5rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
 with head_col2:
     if st.button("⚙️", help="Setări"):
-        st.session_state.settings_open = True
-        st.rerun()
+        settings_modal()
 
 # ==========================================
-# 7. MODAL SETĂRI CU BACKDROP BLUR
-# ==========================================
-
-if st.session_state.settings_open:
-    st.markdown("""
-        <div class="settings-backdrop"></div>
-    """, unsafe_allow_html=True)
-    
-    # Container flotant pentru setări
-    with st.container():
-        st.markdown(f"""
-            <div style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:var(--background-color); color:var(--text-color); padding:2rem; border-radius:16px; width:90%; max-width:450px; box-shadow:0 20px 40px rgba(0,0,0,0.4); border:1px solid rgba(128,128,128,0.3);">
-                <h2>{t['settings_title']}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Elemente interactive în interiorul modalului
-        st.session_state.ui_lang = st.selectbox(
-            t['ui_lang_label'], 
-            ["Română", "English"], 
-            index=0 if st.session_state.ui_lang == "Română" else 1,
-            key="modal_lang_sel"
-        )
-        st.session_state.font_size = st.selectbox(
-            t['font_size_label'], 
-            ["Compact (13px)", "Normal (15px)", "Large (18px)"],
-            index=1,
-            key="modal_font_sel"
-        )
-        
-        if st.button(t['close'], key="close_settings_btn"):
-            st.session_state.settings_open = False
-            st.rerun()
-
-# ==========================================
-# 8. INTERFAȚA PRINCIPALĂ (INPUT & GENERARE)
+# 8. INTERFAȚA DE INPUT & GENERARE
 # ==========================================
 
 topic_input = st.text_input(t['input_label'], value=st.session_state.current_topic, placeholder=t['input_placeholder'])
@@ -325,7 +271,7 @@ if generate_btn:
     if not topic_input.strip():
         st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
-        st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets. Rulează în Modul Demo/Simulare sau adaugă cheia în setările serverului.")
+        st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
         st.session_state.current_topic = topic_input
         st.session_state.current_image = None
@@ -379,7 +325,6 @@ if generate_btn:
                 except Exception as e:
                     st.warning(f"Imaginea nu a putut fi generată: {str(e)}")
 
-        # Salvare în istoric
         st.session_state.history.insert(0, {
             "topic": topic_input,
             "posts": st.session_state.current_posts,
@@ -388,12 +333,12 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE & MOCKUPS
+# 9. AFIȘARE REZULTATE ȘI MOCKUPS
 # ==========================================
 
 if st.session_state.current_posts:
     st.markdown("---")
-    st.markdown(f"## 📱 {t['app_title']}")
+    st.markdown("## 📱 Rezultate Campanie")
     
     col_viz, col_posts = st.columns([1.2, 2])
     
@@ -409,7 +354,6 @@ if st.session_state.current_posts:
         st.caption(st.session_state.current_posts['img_prompt'])
 
     with col_posts:
-        # LinkedIn
         st.markdown(f"""
         <div class="mockup-container brand-linkedin">
             <div class="mockup-header">
@@ -420,7 +364,6 @@ if st.session_state.current_posts:
         </div>
         """, unsafe_allow_html=True)
         
-        # Twitter (X)
         if st.session_state.current_posts['twitter']:
             st.markdown(f"""
             <div class="mockup-container brand-twitter">
@@ -432,7 +375,6 @@ if st.session_state.current_posts:
             </div>
             """, unsafe_allow_html=True)
             
-        # Instagram
         if st.session_state.current_posts['instagram']:
             st.markdown(f"""
             <div class="mockup-container brand-instagram">
