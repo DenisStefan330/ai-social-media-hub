@@ -133,7 +133,7 @@ UI_TEXTS = {
         "btn_gen": "✨ Generate Campaign",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
-        "settings_title": "⚙️️ Settings & Preferences",
+        "settings_title": "⚙️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
         "theme_label": "🌓 Theme Mode (Light / Dark)",
@@ -159,13 +159,12 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     """
 
 # ==========================================
-# 4. DESIGN CSS IZOLAT ȘI CURAT
+# 4. DESIGN CSS CURAT & DINAMIC
 # ==========================================
 
 st.markdown(f"""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-    /* Stiluri izolate strict pe componentele aplicației */
     .stApp {{
         font-family: 'Inter', sans-serif !important;
     }}
@@ -293,7 +292,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
@@ -357,7 +356,7 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE ȘI MOCKUPS (DOM Validat)
+# 9. AFIȘARE REZULTATE ȘI MOCKUPS (DOM Validat Corect)
 # ==========================================
 
 if st.session_state.current_posts:
@@ -378,6 +377,7 @@ if st.session_state.current_posts:
         st.caption(st.session_state.current_posts['img_prompt'])
 
     with col_posts:
+        # LinkedIn Mockup
         st.markdown(f"""
         <div class="mockup-container brand-linkedin">
             <div class="mockup-header">
@@ -388,6 +388,7 @@ if st.session_state.current_posts:
         </div>
         """, unsafe_allow_html=True)
         
+        # Twitter Mockup
         if st.session_state.current_posts['twitter']:
             st.markdown(f"""
             <div class="mockup-container brand-twitter">
@@ -399,6 +400,7 @@ if st.session_state.current_posts:
             </div>
             """, unsafe_allow_html=True)
             
+        # Instagram Mockup (Taguri corectate: p închis cu p, fără div rezidual)
         if st.session_state.current_posts['instagram']:
             st.markdown(f"""
             <div class="mockup-container brand-instagram">
