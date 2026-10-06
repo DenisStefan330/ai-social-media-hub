@@ -93,6 +93,8 @@ if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
 if "font_size" not in st.session_state:
     st.session_state.font_size = "Normal (15px)"
+if "theme_mode" not in st.session_state:
+    st.session_state.theme_mode = "Sincronizat cu sistemul (Auto)"
 if "history" not in st.session_state:
     st.session_state.history = []
 if "current_posts" not in st.session_state:
@@ -111,12 +113,13 @@ UI_TEXTS = {
         "lang_label": "🌐 Limba Conținutului",
         "tone_label": "⚡ Tonul Campaniei",
         "toggle_img": "🎨 Generare Imagine (FLUX AI)",
-        "btn_gen": "✨ Generează Campania",
+        "btn_gen": "✨ Generează Postările",
         "sidebar_title": "💬 Istoric Postări",
-        "new_chat": "➕ Postare Nouă",  # Actualizat pentru un ton mai dinamic și potrivit aplicației
+        "new_chat": "➕ Postare Nouă",
         "settings_title": "⚙️ Setări & Preferințe",
         "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
+        "theme_label": "🌓 Mod Temă (Light / Dark)",
         "save_close": "Salvează & Închide"
     },
     "English": {
@@ -127,12 +130,13 @@ UI_TEXTS = {
         "lang_label": "🌐 Content Language",
         "tone_label": "⚡ Campaign Tone",
         "toggle_img": "🎨 Generate Image (FLUX AI)",
-        "btn_gen": "✨ Generate Campaign",
+        "btn_gen": "✨ Generate Posts",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
         "settings_title": "⚙️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
+        "theme_label": "🌓 Theme Mode (Light / Dark)",
         "save_close": "Save & Close"
     }
 }
@@ -143,50 +147,113 @@ font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
 # ==========================================
-# 4. DESIGN CSS CURAT
+# 4. DESIGN CSS CU GRADIENT PE FUNDALUL APLICAȚIEI
 # ==========================================
 
+# Gradient personalizat pentru fundalul aplicației în funcție de mod
+app_bg_css = ""
+if st.session_state.theme_mode == "Light (Mod Luminos)":
+    app_bg_css = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.04) 0%, transparent 45%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.04) 0%, transparent 45%),
+                    #f8fafc !important;
+        color: #0f172a !important;
+    }
+    .mockup-container { background-color: #ffffff !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
+    """
+elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
+    app_bg_css = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                    #090d16 !important;
+        color: #f8fafc !important;
+    }
+    .mockup-container { background-color: #111827 !important; color: #f8fafc !important; border: 1px solid #1f2937 !important; }
+    """
+else:  # Auto / Sincronizat cu sistemul
+    app_bg_css = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
+                    var(--background-color) !important;
+    }
+    .mockup-container {
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+    }
+    """
+
 st.markdown(f"""
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
     html, body, [class*="css"] {{
         font-family: 'Inter', sans-serif !important;
+    }}
+    
+    @keyframes fadeInUp {{
+        from {{ opacity: 0; transform: translateY(16px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
+
+    .animated-title {{
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 50%, #7c3aed 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shineGradient 6s linear infinite;
+        font-weight: 800;
+    }}
+    @keyframes shineGradient {{
+        to {{ background-position: 200% center; }}
     }}
     
     .stButton button {{
         background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
         color: white !important;
         font-weight: 600 !important;
-        border-radius: 12px !important;
-        padding: 0.75rem !important;
+        border-radius: 14px !important;
+        padding: 0.8rem 1.2rem !important;
         border: none !important;
         width: 100% !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }}
     .stButton button:hover {{
         opacity: 0.95;
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
     }}
 
+    /* Stilizare mochete social media (postări) */
+    .mockup-container, .mockup-container * {{
+        font-size: {active_font_size} !important;
+    }}
     .mockup-container {{
-        background-color: var(--secondary-background-color);
-        color: var(--text-color);
-        border-radius: 16px;
+        border-radius: 18px;
         padding: 24px;
         margin-bottom: 24px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-        border: 1px solid rgba(128,128,128,0.2);
-        font-size: {active_font_size} !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
         line-height: 1.6;
+        animation: fadeInUp 0.5s ease-out forwards;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }}
+    .mockup-container:hover {{
+        transform: translateY(-3px);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
     }}
     .mockup-header {{ display: flex; align-items: center; margin-bottom: 16px; }}
     .mockup-avatar {{ width: 44px; height: 44px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }}
-    .mockup-name {{ font-weight: 700; font-size: 15px; margin: 0; }}
-    .mockup-meta {{ font-size: 12px; opacity: 0.7; margin: 0; }}
+    .mockup-name {{ font-weight: 700; font-size: 16px !important; margin: 0; }}
+    .mockup-meta {{ font-size: 13px !important; opacity: 0.7; margin: 0; }}
     .brand-linkedin {{ border-top: 4px solid #0a66c2; }}
     .brand-twitter {{ border-top: 4px solid #38bdf8; }}
     .brand-instagram {{ border-top: 4px solid #e1306c; }}
     .mockup-content {{ white-space: pre-wrap; }}
+
+    {app_bg_css}
     </style>
 """, unsafe_allow_html=True)
 
@@ -208,6 +275,12 @@ def settings_modal():
         t['font_size_label'], 
         ["Compact (13px)", "Normal (15px)", "Large (18px)"],
         index=1 if st.session_state.font_size == "Normal (15px)" else (0 if "Compact" in st.session_state.font_size else 2)
+    )
+
+    st.session_state.theme_mode = st.selectbox(
+        t['theme_label'],
+        ["Sincronizat cu sistemul (Auto)", "Light (Mod Luminos)", "Dark (Mod Întunecat)"],
+        index=0 if st.session_state.theme_mode == "Sincronizat cu sistemul (Auto)" else (1 if "Light" in st.session_state.theme_mode else 2)
     )
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -241,13 +314,13 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# 7. HEADER PRINCIPAL CU ICONIȚĂ ROTIȚĂ ⚙️
+# 7. HEADER PRINCIPAL CU TITLU ANIMAT ȘI ROTIȚĂ ⚙️
 # ==========================================
 
 head_col1, head_col2 = st.columns([11, 1])
 with head_col1:
-    st.markdown(f"<h2 style='margin:0; font-weight:800;'>{t['app_title']}</h2>", unsafe_allow_html=True)
-    st.markdown(f"<p style='opacity:0.7; margin-bottom:1.5rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
+    st.markdown(f"<h1 class='animated-title' style='margin:0; font-size: 2.2rem;'>{t['app_title']}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='opacity:0.7; margin-top:0.3rem; margin-bottom:1.8rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
 with head_col2:
     if st.button("⚙️", help="Setări"):
         settings_modal()
@@ -286,7 +359,7 @@ if generate_btn:
                     st.error(str(e))
                     st.stop()
 
-        st.markdown("### ✍️ Se generează campania...")
+        st.markdown("### ✍️ Se generează conținutul...")
         stream_container = st.empty()
         
         user_prompt = f"SUBJECT/CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
@@ -338,7 +411,7 @@ if generate_btn:
 
 if st.session_state.current_posts:
     st.markdown("---")
-    st.markdown("## 📱 Rezultate Campanie")
+    st.markdown("## 📱 Rezultate Postare")
     
     col_viz, col_posts = st.columns([1.2, 2])
     
