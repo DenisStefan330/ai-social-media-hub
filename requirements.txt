@@ -1,5 +1,4 @@
 streamlit>=1.40.0
-google-genai>=0.2.0
 requests
 groq
-
+beautifulsoup4
