@@ -38,7 +38,7 @@ def scrape_url_content(url: str) -> str:
 
 def get_best_available_model(client) -> str:
     """
-    Interoghează dinamic modelele disponibile pe contul Groq pentru a evita erorile de tip model_not_found.
+    Interoghează dinamic modelele Groq disponibile, excluzând modelele de tip guard sau embed.
     """
     fallback_models = [
         "llama-3.1-8b-instant",
@@ -49,7 +49,13 @@ def get_best_available_model(client) -> str:
     ]
     try:
         models_response = client.models.list()
-        available_ids = [m.id for m in models_response.data if "llama" in m.id.lower()]
+        # Filtrăm strict doar modelele Llama de chat, evitând modelele de gardă/moderare sau embedding
+        available_ids = [
+            m.id for m in models_response.data 
+            if "llama" in m.id.lower() 
+            and "guard" not in m.id.lower() 
+            and "embed" not in m.id.lower()
+        ]
         for model in fallback_models:
             if model in available_ids:
                 return model
@@ -64,8 +70,6 @@ def stream_groq_text(prompt: str, api_key: str):
         raise Exception("Cheia Groq API este invalidă sau lipsește. Verifică în setările de pe Streamlit Cloud dacă ai setat corect 'GROQ_API_KEY' (trebuie să înceapă cu 'gsk_').")
 
     client = groq.Groq(api_key=api_key)
-    
-    # Selectăm dinamic un model activ pentru a preveni erorile de tip 404
     active_model = get_best_available_model(client)
 
     system_prompt = (
