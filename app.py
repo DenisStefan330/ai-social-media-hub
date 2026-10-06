@@ -190,7 +190,7 @@ else:
     """
 
 # ==========================================
-# 4. INJECTARE CSS SIGURĂ
+# 4. INJECTARE CSS ÎNCAPSULAT (FĂRĂ COD PUR ÎN PYTHON)
 # ==========================================
 
 st.markdown("""
@@ -375,7 +375,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
@@ -492,7 +492,7 @@ if st.session_state.current_posts:
             render_social_mockup(
                 "Twitter", "brand-twitter", "10px", 
                 'Brand Account <span style="color:#38bdf8;">✔</span>', "@brand_hub • 1m", 
-                st.session_state.current_posts['twitter']
+                st.session_state.current_posts['twitter']</i>
             )
             
         if st.session_state.current_posts['instagram']:
