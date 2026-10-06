@@ -14,17 +14,17 @@ def generate_text_groq(prompt: str, api_key: str) -> str:
     from groq import Groq
     client = Groq(api_key=api_key)
     
-    # Lista de modele, ordonata de la cel mai performant la fallback-uri stabile (Free Tier)
-    models_to_try = [
-        "llama-3.1-70b-versatile", # Modelul principal stabil
-        "llama-3.1-8b-instant",    # Extrem de rapid, fallback excelent
-        "mixtral-8x7b-32768"       # Model arhitectural diferit, foarte fiabil pe Groq
+    # 1. Modele de bază extrem de stabile (curente)
+    primary_models = [
+        "llama3-8b-8192",  # Varianta standard Llama 3, foarte stabilă pe Free Tier
+        "gemma2-9b-it",    # Modelul Google, o rezervă excelentă
+        "llama-3.3-70b-versatile"
     ]
     
     last_error = None
     
-    # Incercam modelele secvential. Daca unul pica (ex: 404 sau Rate Limit), trecem la urmatorul.
-    for model_name in models_to_try:
+    # ETAPA A: Încercăm lista principală secvențial
+    for model_name in primary_models:
         try:
             completion = client.chat.completions.create(
                 model=model_name,
@@ -35,16 +35,49 @@ def generate_text_groq(prompt: str, api_key: str) -> str:
                 temperature=0.7,
                 max_tokens=2048,
             )
-            # Daca a reusit, returnam textul si oprim bucla
             return completion.choices[0].message.content
-            
         except Exception as e:
-            # Salvam eroarea si continuam bucla catre urmatorul model
             last_error = str(e)
             continue
             
-    # Daca TOATE modelele au picat, abia atunci ridicam eroarea catre interfata Streamlit
-    raise Exception(f"Toate modelele au eșuat. Ultima eroare: {last_error}")
+    # ETAPA B: Auto-Descoperire (Dynamic Fallback)
+    # Dacă ajungem aici, înseamnă că Groq a schimbat din nou modelele. 
+    # Interogăm API-ul pentru a afla modelele active la care contul tău are acces acum.
+    try:
+        available_models = client.models.list().data
+        
+        # Filtrăm modelele pentru a le păstra doar pe cele de text 
+        # (excludem audio 'whisper' și viziune 'llava'/'vision')
+        text_models = [
+            m.id for m in available_models 
+            if "whisper" not in m.id.lower() 
+            and "llava" not in m.id.lower()
+            and "vision" not in m.id.lower()
+        ]
+        
+        # Încercăm primul model de text găsit pe server care e valabil pentru noi
+        for dynamic_model in text_models:
+            try:
+                completion = client.chat.completions.create(
+                    model=dynamic_model,
+                    messages=[
+                        {"role": "system", "content": "You are an elite AI Social Media R&D Strategist."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2048,
+                )
+                return completion.choices[0].message.content
+            except Exception:
+                continue
+                
+    except Exception as api_err:
+        raise Exception(f"Eroare de sistem la obținerea noilor modele Groq: {str(api_err)}")
+        
+    # Dacă absolut totul eșuează (situație extrem de rară - ex. API picat global)
+    raise Exception(f"Platforma Groq a refuzat cererea pe toate modelele disponibile. Ultima eroare: {last_error}")
+
+
 
 def generate_image_pollinations(prompt: str, width: int = 1280, height: int = 720) -> bytes:
     # Optimizare: Adaugam 'high quality, professional' in engleza pentru a forta modelul vizual
