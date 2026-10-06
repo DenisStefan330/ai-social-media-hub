@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 import streamlit as st
 
 # ==========================================
-# 1. GESTIONARE SECURE A CHEILOR API
+# 1. GESTIONARE SECURATĂ A CHEILOR API
 # ==========================================
 def get_secret(key_name: str) -> str:
     try:
@@ -146,7 +146,6 @@ t = UI_TEXTS[st.session_state.ui_lang]
 font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px)": "18px"}
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
-# Generare reguli CSS dinamice pentru temă și font size
 theme_css = ""
 if st.session_state.theme_mode == "Light (Mod Luminos)":
     theme_css = """
@@ -160,7 +159,7 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     """
 
 # ==========================================
-# 4. DESIGN CSS CURAT & DINAMIC
+# 4. DESIGN CSS DINAMIC
 # ==========================================
 
 st.markdown(f"""
@@ -185,7 +184,6 @@ st.markdown(f"""
         transform: translateY(-1px);
     }}
 
-    /* Aplicare forțată a dimensiunii fontului pe tot conținutul mochetei */
     .mockup-container, .mockup-container * {{
         font-size: {active_font_size} !important;
     }}
@@ -405,7 +403,7 @@ if st.session_state.current_posts:
             <div class="mockup-container brand-instagram">
                 <div class="mockup-header">
                     <div class="mockup-avatar"></div>
-                    <div><p class="mockup-name">social_hub_official</div></div>
+                    <div><p class="mockup-name">social_hub_official</p></div>
                 </div>
                 <div class="mockup-content"><b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}</div>
             </div>
