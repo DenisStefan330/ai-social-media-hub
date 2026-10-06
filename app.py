@@ -133,7 +133,7 @@ UI_TEXTS = {
         "btn_gen": "✨ Generate Posts",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
-        "settings_title": "⚙️ Settings & Preferences",
+        "settings_title": "⚙️️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
         "theme_label": "🌓 Theme Mode (Light / Dark)",
@@ -147,13 +147,82 @@ font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
 # ==========================================
-# 4. DESIGN CSS CU GRADIENT PE FUNDALUL APLICAȚIEI
+# 4. DESIGN CSS SEPARAT (FĂRĂ CONFLICTE DE F-STRING)
 # ==========================================
 
-# Gradient personalizat pentru fundalul aplicației în funcție de mod
-app_bg_css = ""
+# Stiluri statice sigure
+st.markdown("""
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animated-title {
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 50%, #7c3aed 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shineGradient 6s linear infinite;
+        font-weight: 800;
+    }
+    @keyframes shineGradient {
+        to { background-position: 200% center; }
+    }
+    
+    .stButton button {
+        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        border-radius: 14px !important;
+        padding: 0.8rem 1.2rem !important;
+        border: none !important;
+        width: 100% !important;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .stButton button:hover {
+        opacity: 0.95;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
+    }
+
+    .mockup-container, .mockup-container * {
+        font-size: 15px !important;
+    }
+    .mockup-container {
+        border-radius: 18px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+        line-height: 1.6;
+        animation: fadeInUp 0.5s ease-out forwards;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .mockup-container:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+    }
+    .mockup-header { display: flex; align-items: center; margin-bottom: 16px; }
+    .mockup-avatar { width: 44px; height: 44px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }
+    .mockup-name { font-weight: 700; font-size: 16px !important; margin: 0; }
+    .mockup-meta { font-size: 13px !important; opacity: 0.7; margin: 0; }
+    .brand-linkedin { border-top: 4px solid #0a66c2; }
+    .brand-twitter { border-top: 4px solid #38bdf8; }
+    .brand-instagram { border-top: 4px solid #e1306c; }
+    .mockup-content { white-space: pre-wrap; }
+    </style>
+""", unsafe_allow_html=True)
+
+# CSS dinamic pentru temă și mărime font
+theme_background_rule = ""
 if st.session_state.theme_mode == "Light (Mod Luminos)":
-    app_bg_css = """
+    theme_background_rule = """
     [data-testid="stAppViewContainer"] {
         background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.04) 0%, transparent 45%),
                     radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.04) 0%, transparent 45%),
@@ -163,7 +232,7 @@ if st.session_state.theme_mode == "Light (Mod Luminos)":
     .mockup-container { background-color: #ffffff !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
     """
 elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
-    app_bg_css = """
+    theme_background_rule = """
     [data-testid="stAppViewContainer"] {
         background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
                     radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
@@ -172,8 +241,8 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     }
     .mockup-container { background-color: #111827 !important; color: #f8fafc !important; border: 1px solid #1f2937 !important; }
     """
-else:  # Auto / Sincronizat cu sistemul
-    app_bg_css = """
+else:
+    theme_background_rule = """
     [data-testid="stAppViewContainer"] {
         background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
                     radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
@@ -186,76 +255,15 @@ else:  # Auto / Sincronizat cu sistemul
     }
     """
 
-st.markdown(f"""
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-    html, body, [class*="css"] {{
-        font-family: 'Inter', sans-serif !important;
-    }}
-    
-    @keyframes fadeInUp {{
-        from {{ opacity: 0; transform: translateY(16px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-
-    .animated-title {{
-        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 50%, #7c3aed 100%);
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        animation: shineGradient 6s linear infinite;
-        font-weight: 800;
-    }}
-    @keyframes shineGradient {{
-        to {{ background-position: 200% center; }}
-    }}
-    
-    .stButton button {{
-        background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border-radius: 14px !important;
-        padding: 0.8rem 1.2rem !important;
-        border: none !important;
-        width: 100% !important;
-        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }}
-    .stButton button:hover {{
-        opacity: 0.95;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
-    }}
-
-    /* Stilizare mochete social media (postări) */
-    .mockup-container, .mockup-container * {{
-        font-size: {active_font_size} !important;
-    }}
-    .mockup-container {{
-        border-radius: 18px;
-        padding: 24px;
-        margin-bottom: 24px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
-        line-height: 1.6;
-        animation: fadeInUp 0.5s ease-out forwards;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }}
-    .mockup-container:hover {{
-        transform: translateY(-3px);
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-    }}
-    .mockup-header {{ display: flex; align-items: center; margin-bottom: 16px; }}
-    .mockup-avatar {{ width: 44px; height: 44px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }}
-    .mockup-name {{ font-weight: 700; font-size: 16px !important; margin: 0; }}
-    .mockup-meta {{ font-size: 13px !important; opacity: 0.7; margin: 0; }}
-    .brand-linkedin {{ border-top: 4px solid #0a66c2; }}
-    .brand-twitter {{ border-top: 4px solid #38bdf8; }}
-    .brand-instagram {{ border-top: 4px solid #e1306c; }}
-    .mockup-content {{ white-space: pre-wrap; }}
-
-    {app_bg_css}
-    </style>
-""", unsafe_allow_html=True)
+dynamic_override_css = f"""
+<style>
+.mockup-container, .mockup-container * {{
+    font-size: {active_font_size} !important;
+}}
+{theme_background_rule}
+</style>
+"""
+st.markdown(dynamic_override_css, unsafe_allow_html=True)
 
 # ==========================================
 # 5. MODALUL DE SETĂRI NATIV (ST.DIALOG)
