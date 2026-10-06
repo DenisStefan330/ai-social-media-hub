@@ -49,24 +49,29 @@ def stream_groq_text(prompt: str, api_key: str):
         "[IMG_PROMPT]\n...1 highly detailed professional visual prompt in English for FLUX...\n"
         "2. Avoid generic fluff; use strong hooks."
     )
+    # Încercăm cu modelul principal actualizat
     try:
         stream = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7, max_tokens=2500, stream=True
+            temperature=0.7, max_tokens=2000, stream=True
         )
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
-    except Exception:
-        stream_fb = client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7, max_tokens=2500, stream=True
-        )
-        for chunk in stream_fb:
-            if chunk.choices[0].delta.content is not None:
-                yield chunk.choices[0].delta.content
+    except Exception as primary_err:
+        # Fallback la modelul rapid actualizat compatibil cu API-ul curent Groq
+        try:
+            stream_fb = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+                temperature=0.7, max_tokens=2000, stream=True
+            )
+            for chunk in stream_fb:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+        except Exception as fallback_err:
+            raise Exception(f"Eroare API Groq: {str(primary_err)}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
@@ -222,7 +227,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
