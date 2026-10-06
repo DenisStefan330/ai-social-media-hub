@@ -53,34 +53,20 @@ def stream_groq_text(prompt: str, api_key: str):
         "2. Avoid generic fluff; use strong hooks."
     )
     
-    # Încercăm modelul principal actualizat compatibil cu contul tău
     try:
         stream = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.6, 
-            max_completion_tokens=2000, 
+            temperature=0.7, 
+            max_tokens=2000, 
             stream=True
         )
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
                 
-    except Exception as primary_err:
-        # Fallback la modelul alternativ disponibil pe Groq
-        try:
-            stream_fb = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-                temperature=0.7, 
-                max_tokens=2000, 
-                stream=True
-            )
-            for chunk in stream_fb:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
-        except Exception as fallback_err:
-            raise Exception(f"Eroare Groq API: Asigură-te că ai o cheie API validă și activă. Detalii: {str(primary_err)}")
+    except Exception as api_err:
+        raise Exception(f"Eroare Groq API: Verifică cheia API și permisiunile. Detalii: {str(api_err)}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
@@ -103,10 +89,6 @@ st.set_page_config(
 
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
-if "font_size" not in st.session_state:
-    st.session_state.font_size = "Normal (15px)"
-if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Sincronizat cu sistemul (Auto)"
 if "history" not in st.session_state:
     st.session_state.history = []
 if "current_posts" not in st.session_state:
@@ -129,9 +111,7 @@ UI_TEXTS = {
         "sidebar_title": "💬 Istoric Postări",
         "new_chat": "➕ Postare Nouă",
         "settings_title": "⚙️ Setări & Preferințe",
-        "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
-        "theme_label": "🌓 Mod Temă (Light / Dark)",
         "save_close": "Salvează & Închide"
     },
     "English": {
@@ -146,9 +126,7 @@ UI_TEXTS = {
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
         "settings_title": "⚙️ Settings & Preferences",
-        "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
-        "theme_label": "🌓 Theme Mode (Light / Dark)",
         "save_close": "Save & Close"
     }
 }
@@ -156,29 +134,17 @@ UI_TEXTS = {
 t = UI_TEXTS[st.session_state.ui_lang]
 
 # ==========================================
-# 4. MODALUL DE SETĂRI NATIV (ST.DIALOG)
+# 4. MODALUL DE SETĂRI NATIV (SIMPLIFICAT)
 # ==========================================
 
 @st.dialog(t['settings_title'])
 def settings_modal():
-    st.markdown("Configurează preferințele de sistem și afișare:")
+    st.markdown("Configurează limba interfeței:")
     
     st.session_state.ui_lang = st.selectbox(
         t['ui_lang_label'], 
         ["Română", "English"], 
         index=0 if st.session_state.ui_lang == "Română" else 1
-    )
-    
-    st.session_state.font_size = st.selectbox(
-        t['font_size_label'], 
-        ["Compact (13px)", "Normal (15px)", "Large (18px)"],
-        index=1 if st.session_state.font_size == "Normal (15px)" else (0 if "Compact" in st.session_state.font_size else 2)
-    )
-
-    st.session_state.theme_mode = st.selectbox(
-        t['theme_label'],
-        ["Sincronizat cu sistemul (Auto)", "Light (Mod Luminos)", "Dark (Mod Întunecat)"],
-        index=0 if st.session_state.theme_mode == "Sincronizat cu sistemul (Auto)" else (1 if "Light" in st.session_state.theme_mode else 2)
     )
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -290,7 +256,7 @@ if generate_btn:
         }
 
         if generate_image_toggle and HUGGINGFACE_API_KEY:
-            with st.spinner("🎨 Se generează imaginea FLUX..."):
+            with st.spinner("🎨 Se generează imaginea prin Hugging Face FLUX..."):
                 try:
                     st.session_state.current_image = generate_image_huggingface(img_prompt, HUGGINGFACE_API_KEY)
                 except Exception as e:
@@ -314,7 +280,7 @@ if st.session_state.current_posts:
     col_viz, col_posts = st.columns([1.2, 2])
     
     with col_viz:
-        st.markdown("#### 🖼️ Vizual Generat")
+        st.markdown("#### 🖼️ Vizual Generat (FLUX)")
         if st.session_state.current_image:
             st.image(st.session_state.current_image, use_container_width=True)
             st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.current_image, "campanie.jpg", "image/jpeg")
