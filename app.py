@@ -36,13 +36,38 @@ def scrape_url_content(url: str) -> str:
     except Exception as e:
         raise Exception(f"Eroare la citirea link-ului: {str(e)}")
 
+def get_best_available_model(client) -> str:
+    """
+    Interoghează dinamic modelele disponibile pe contul Groq pentru a evita erorile de tip model_not_found.
+    """
+    fallback_models = [
+        "llama-3.1-8b-instant",
+        "llama-3.2-3b-preview",
+        "llama-3.2-1b-preview",
+        "llama-3.3-70b-versatile",
+        "llama3-8b-8192"
+    ]
+    try:
+        models_response = client.models.list()
+        available_ids = [m.id for m in models_response.data if "llama" in m.id.lower()]
+        for model in fallback_models:
+            if model in available_ids:
+                return model
+        if available_ids:
+            return available_ids[0]
+    except Exception:
+        pass
+    return "llama-3.1-8b-instant"
+
 def stream_groq_text(prompt: str, api_key: str):
     if not api_key or not api_key.startswith("gsk_"):
         raise Exception("Cheia Groq API este invalidă sau lipsește. Verifică în setările de pe Streamlit Cloud dacă ai setat corect 'GROQ_API_KEY' (trebuie să înceapă cu 'gsk_').")
 
     client = groq.Groq(api_key=api_key)
     
-    # Prompt de sistem extrem de riguros pentru a elimina conținutul generalist și blând
+    # Selectăm dinamic un model activ pentru a preveni erorile de tip 404
+    active_model = get_best_available_model(client)
+
     system_prompt = (
         "You are an elite, hard-hitting B2B Social Media Content Strategist and Growth Hacker. "
         "Your task is to write hyper-engaging, highly specific, data-backed, and opinionated social media posts. "
@@ -59,7 +84,7 @@ def stream_groq_text(prompt: str, api_key: str):
     
     try:
         stream = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=active_model,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
             temperature=0.75, 
             max_tokens=2000, 
@@ -70,7 +95,7 @@ def stream_groq_text(prompt: str, api_key: str):
                 yield chunk.choices[0].delta.content
                 
     except Exception as api_err:
-        raise Exception(f"Eroare Groq API: Verifică cheia API și permisiunile. Detalii: {str(api_err)}")
+        raise Exception(f"Eroare Groq API (Model: {active_model}): Detalii: {str(api_err)}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
@@ -206,7 +231,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
@@ -223,8 +248,6 @@ if generate_btn:
                     st.error(str(e))
                     st.stop()
         else:
-            # Pentru a evita răspunsurile generale când utilizatorul introduce doar un cuvânt/subiect,
-            # adăugăm un îndemn explicit pentru date concrete, statistici și unghiuri unice.
             context_data = f"SUBIECT: {topic_input}. Te rog să incluzi date concrete din industrie, metrici estimative de impact, exemple practice și unghiuri de analiză profunde, evitând orice clișeu sau introducere generală."
 
         st.markdown("### ✍️ Se generează conținutul avansat...")
