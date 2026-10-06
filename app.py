@@ -41,23 +41,27 @@ def stream_groq_text(prompt: str, api_key: str):
         raise Exception("Cheia Groq API este invalidă sau lipsește. Verifică în setările de pe Streamlit Cloud dacă ai setat corect 'GROQ_API_KEY' (trebuie să înceapă cu 'gsk_').")
 
     client = groq.Groq(api_key=api_key)
+    
+    # Prompt de sistem extrem de riguros pentru a elimina conținutul generalist și blând
     system_prompt = (
-        "You are an elite Social Media Copywriter and Content Strategist. "
-        "Create viral, insightful posts based on the user's topic or provided article text. "
-        "CRITICAL RULES: "
-        "1. Format output EXACTLY with these markers:\n"
-        "[LINKEDIN]\n...linkedin post here...\n"
-        "[TWITTER]\n...twitter post here...\n"
-        "[INSTAGRAM]\n...instagram caption here...\n"
-        "[IMG_PROMPT]\n...1 highly detailed professional visual prompt in English for FLUX...\n"
-        "2. Avoid generic fluff; use strong hooks."
+        "You are an elite, hard-hitting B2B Social Media Content Strategist and Growth Hacker. "
+        "Your task is to write hyper-engaging, highly specific, data-backed, and opinionated social media posts. "
+        "CRITICAL RULES TO AVOID GENERIC CONTENT:\n"
+        "1. NEVER use cliché fluff phrases like 'In today's fast-paced world', 'In conclusion', 'Revolutionizing the industry', or 'Excited to announce'.\n"
+        "2. Start immediately with a controversial hook, a hard metric, a counter-intuitive insight, or a striking observation.\n"
+        "3. Provide deep tactical insights, actionable frameworks, or concrete case studies based on the subject provided.\n"
+        "4. Format output EXACTLY with these markers:\n"
+        "[LINKEDIN]\n...hyper-targeted professional post with bold insights and line breaks...\n"
+        "[TWITTER]\n...punchy, high-impact thread hook or single sharp tweet...\n"
+        "[INSTAGRAM]\n...engaging visual caption with clear value and relevant hashtags...\n"
+        "[IMG_PROMPT]\n...1 highly detailed professional cinematic visual prompt in English for FLUX...\n"
     )
     
     try:
         stream = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7, 
+            temperature=0.75, 
             max_tokens=2000, 
             stream=True
         )
@@ -89,10 +93,6 @@ st.set_page_config(
 
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
-if "font_size" not in st.session_state:
-    st.session_state.font_size = "Normal (15px)"
-if "theme_mode" not in st.session_state:
-    st.session_state.theme_mode = "Sincronizat cu sistemul (Auto)"
 if "history" not in st.session_state:
     st.session_state.history = []
 if "current_posts" not in st.session_state:
@@ -106,8 +106,8 @@ UI_TEXTS = {
     "Română": {
         "app_title": "AI Social Media Hub",
         "app_sub": "Platformă Enterprise de Generare Conținut Multi-Platformă",
-        "input_label": "🔗 Subiect sau URL Articol:",
-        "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul AI-ului în medicină",
+        "input_label": "🔗 Subiect detaliat sau URL Articol:",
+        "input_placeholder": "Ex: https://techcrunch.com/... SAU Analiză detaliată despre impactul agentic AI în companii",
         "lang_label": "🌐 Limba Conținutului",
         "tone_label": "⚡ Tonul Campaniei",
         "toggle_img": "🎨 Generare Imagine (FLUX AI)",
@@ -115,16 +115,14 @@ UI_TEXTS = {
         "sidebar_title": "💬 Istoric Postări",
         "new_chat": "➕ Postare Nouă",
         "settings_title": "⚙️ Setări & Preferințe",
-        "font_size_label": "🔤 Dimensiune Text Postări",
         "ui_lang_label": "🌐 Limba Interfeței",
-        "theme_label": "🌓 Mod Temă (Light / Dark)",
         "save_close": "Salvează & Închide"
     },
     "English": {
         "app_title": "AI Social Media Hub",
         "app_sub": "Enterprise Multi-Platform Content Generator",
-        "input_label": "🔗 Subject or Article URL:",
-        "input_placeholder": "Ex: https://techcrunch.com/... OR Future of AI in medicine",
+        "input_label": "🔗 Detailed Subject or Article URL:",
+        "input_placeholder": "Ex: https://techcrunch.com/... OR Deep dive into agentic AI enterprise adoption",
         "lang_label": "🌐 Content Language",
         "tone_label": "⚡ Campaign Tone",
         "toggle_img": "🎨 Generate Image (FLUX AI)",
@@ -132,9 +130,7 @@ UI_TEXTS = {
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
         "settings_title": "⚙️ Settings & Preferences",
-        "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
-        "theme_label": "🌓 Theme Mode (Light / Dark)",
         "save_close": "Save & Close"
     }
 }
@@ -142,29 +138,17 @@ UI_TEXTS = {
 t = UI_TEXTS[st.session_state.ui_lang]
 
 # ==========================================
-# 4. MODALUL DE SETĂRI NATIV (ST.DIALOG)
+# 4. MODALUL DE SETĂRI NATIV (SIMPLIFICAT)
 # ==========================================
 
 @st.dialog(t['settings_title'])
 def settings_modal():
-    st.markdown("Configurează preferințele de sistem și afișare:")
+    st.markdown("Configurează limba interfeței:")
     
     st.session_state.ui_lang = st.selectbox(
         t['ui_lang_label'], 
         ["Română", "English"], 
         index=0 if st.session_state.ui_lang == "Română" else 1
-    )
-    
-    st.session_state.font_size = st.selectbox(
-        t['font_size_label'], 
-        ["Compact (13px)", "Normal (15px)", "Large (18px)"],
-        index=1 if st.session_state.font_size == "Normal (15px)" else (0 if "Compact" in st.session_state.font_size else 2)
-    )
-
-    st.session_state.theme_mode = st.selectbox(
-        t['theme_label'],
-        ["Sincronizat cu sistemul (Auto)", "Light (Mod Luminos)", "Dark (Mod Întunecat)"],
-        index=0 if st.session_state.theme_mode == "Sincronizat cu sistemul (Auto)" else (1 if "Light" in st.session_state.theme_mode else 2)
     )
     
     st.markdown("<br>", unsafe_allow_html=True)
@@ -238,11 +222,15 @@ if generate_btn:
                 except Exception as e:
                     st.error(str(e))
                     st.stop()
+        else:
+            # Pentru a evita răspunsurile generale când utilizatorul introduce doar un cuvânt/subiect,
+            # adăugăm un îndemn explicit pentru date concrete, statistici și unghiuri unice.
+            context_data = f"SUBIECT: {topic_input}. Te rog să incluzi date concrete din industrie, metrici estimative de impact, exemple practice și unghiuri de analiză profunde, evitând orice clișeu sau introducere generală."
 
-        st.markdown("### ✍️ Se generează conținutul...")
+        st.markdown("### ✍️ Se generează conținutul avansat...")
         stream_container = st.empty()
         
-        user_prompt = f"SUBJECT/CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
+        user_prompt = f"TARGET CONTENT / CONTEXT:\n{context_data}\n\nLANGUAGE: {lang}\nTONE: {tone}\n"
         full_response = ""
         
         try:
@@ -276,7 +264,7 @@ if generate_btn:
         }
 
         if generate_image_toggle and HUGGINGFACE_API_KEY:
-            with st.spinner("🎨 Se generează imaginea FLUX..."):
+            with st.spinner("🎨 Se generează imaginea prin Hugging Face FLUX..."):
                 try:
                     st.session_state.current_image = generate_image_huggingface(img_prompt, HUGGINGFACE_API_KEY)
                 except Exception as e:
@@ -300,7 +288,7 @@ if st.session_state.current_posts:
     col_viz, col_posts = st.columns([1.2, 2])
     
     with col_viz:
-        st.markdown("#### 🖼️️ Vizual Generat")
+        st.markdown("#### 🖼️ Vizual Generat (FLUX)")
         if st.session_state.current_image:
             st.image(st.session_state.current_image, use_container_width=True)
             st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.current_image, "campanie.jpg", "image/jpeg")
