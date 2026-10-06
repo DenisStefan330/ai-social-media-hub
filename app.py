@@ -42,15 +42,13 @@ def stream_groq_text(prompt: str, api_key: str):
 
     client = groq.Groq(api_key=api_key)
     
-    # Listă bulletproof în cascadă cu toate modelele suportate de Groq
+    # Listă bulletproof actualizată cu modelele de producție active pe Groq
     candidate_models = [
+        "openai/gpt-oss-20b",
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "llama-3.1-70b-versatile",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
+        "qwen/qwen3-32b",
+        "mixtral-8x7b-32768"
     ]
     
     system_prompt = (
@@ -70,17 +68,23 @@ def stream_groq_text(prompt: str, api_key: str):
     last_exception = None
     for model_name in candidate_models:
         try:
-            stream = client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-                temperature=0.75, 
-                max_tokens=2000, 
-                stream=True
-            )
+            # Folosim max_completion_tokens pentru modelele noi OpenAI/GPT OSS sau max_tokens pentru celelalte
+            kwargs = {
+                "model": model_name,
+                "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+                "temperature": 0.7,
+                "stream": True
+            }
+            if "gpt-oss" in model_name:
+                kwargs["max_completion_tokens"] = 2000
+            else:
+                kwargs["max_tokens"] = 2000
+
+            stream = client.chat.completions.create(**kwargs)
             for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content is not None:
                     yield chunk.choices[0].delta.content
-            return # Ișim din funcție imediat ce un model a funcționat cu succes
+            return # Ieșire din funcție la succes
         except Exception as e:
             last_exception = e
             continue
