@@ -53,24 +53,28 @@ def stream_groq_text(prompt: str, api_key: str):
         "2. Avoid generic fluff; use strong hooks."
     )
     
-    # Încercăm modelul principal
+    # Încercăm modelul principal actualizat compatibil cu contul tău
     try:
         stream = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7, max_tokens=2000, stream=True
+            temperature=0.6, 
+            max_completion_tokens=2000, 
+            stream=True
         )
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
                 
-    except (groq.NotFoundError, groq.APIStatusError) as primary_err:
-        # Fallback la modelul rapid
+    except Exception as primary_err:
+        # Fallback la modelul alternativ disponibil pe Groq
         try:
             stream_fb = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-                temperature=0.7, max_tokens=2000, stream=True
+                temperature=0.7, 
+                max_tokens=2000, 
+                stream=True
             )
             for chunk in stream_fb:
                 if chunk.choices[0].delta.content is not None:
@@ -315,7 +319,7 @@ if st.session_state.current_posts:
             st.image(st.session_state.current_image, use_container_width=True)
             st.download_button("📥 Descarcă Imaginea (.jpg)", st.session_state.current_image, "campanie.jpg", "image/jpeg")
         else:
-            st.info("Imagine inactivă sau generare oprită. Verifică HUGGINGFACE_API_KEY în Secrets dacă dorești imagini.")
+            st.info("Imagine inactivă sau generare oprită.")
             
         st.markdown("<br><b>Prompt vizual AI:</b>", unsafe_allow_html=True)
         st.caption(st.session_state.current_posts['img_prompt'])
