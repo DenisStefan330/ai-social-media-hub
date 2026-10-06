@@ -133,7 +133,7 @@ UI_TEXTS = {
         "btn_gen": "✨ Generate Posts",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
-        "settings_title": "⚙️️ Settings & Preferences",
+        "settings_title": "⚙️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
         "theme_label": "🌓 Theme Mode (Light / Dark)",
@@ -143,14 +143,54 @@ UI_TEXTS = {
 
 t = UI_TEXTS[st.session_state.ui_lang]
 
-font_size_map = {"Compact (13px)": "13px", "Normal (15px)": "15px", "Large (18px)": "18px"}
+font_size_map = {
+    "Compact (13px)": "13px",
+    "Normal (15px)": "15px",
+    "Large (18px)": "18px"
+}
 active_font_size = font_size_map.get(st.session_state.font_size, "15px")
 
+# Determinare regulă temă de fundal
+theme_background_rule = ""
+if st.session_state.theme_mode == "Light (Mod Luminos)":
+    theme_background_rule = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.04) 0%, transparent 45%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.04) 0%, transparent 45%),
+                    #f8fafc !important;
+        color: #0f172a !important;
+    }
+    .mockup-container { background-color: #ffffff !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
+    """
+elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
+    theme_background_rule = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+                    #090d16 !important;
+        color: #f8fafc !important;
+    }
+    .mockup-container { background-color: #111827 !important; color: #f8fafc !important; border: 1px solid #1f2937 !important; }
+    """
+else:
+    theme_background_rule = """
+    [data-testid="stAppViewContainer"] {
+        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
+                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
+                    var(--background-color) !important;
+    }
+    .mockup-container {
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+    }
+    """
+
 # ==========================================
-# 4. DESIGN CSS SEPARAT (FĂRĂ CONFLICTE DE F-STRING)
+# 4. ARHITECTURĂ CSS CURATĂ (FĂRĂ CONFLICTE DE SINTAXĂ)
 # ==========================================
 
-# Stiluri statice sigure
+# 1. Stiluri statice sigure (fără acolade Python care să corupă șirul)
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -192,9 +232,6 @@ st.markdown("""
         box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
     }
 
-    .mockup-container, .mockup-container * {
-        font-size: 15px !important;
-    }
     .mockup-container {
         border-radius: 18px;
         padding: 24px;
@@ -219,51 +256,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# CSS dinamic pentru temă și mărime font
-theme_background_rule = ""
-if st.session_state.theme_mode == "Light (Mod Luminos)":
-    theme_background_rule = """
-    [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.04) 0%, transparent 45%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.04) 0%, transparent 45%),
-                    #f8fafc !important;
-        color: #0f172a !important;
-    }
-    .mockup-container { background-color: #ffffff !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
-    """
-elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
-    theme_background_rule = """
-    [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
-                    #090d16 !important;
-        color: #f8fafc !important;
-    }
-    .mockup-container { background-color: #111827 !important; color: #f8fafc !important; border: 1px solid #1f2937 !important; }
-    """
-else:
-    theme_background_rule = """
-    [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
-                    var(--background-color) !important;
-    }
-    .mockup-container {
-        background-color: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.2) !important;
-    }
-    """
-
-dynamic_override_css = f"""
+# 2. Injectare controlată a variabilelor dinamice (font size și temă) prin CSS Custom Properties
+dynamic_css = f"""
 <style>
+:root {{
+    --app-font-size: {active_font_size};
+}}
 .mockup-container, .mockup-container * {{
-    font-size: {active_font_size} !important;
+    font-size: var(--app-font-size) !important;
 }}
 {theme_background_rule}
 </style>
 """
-st.markdown(dynamic_override_css, unsafe_allow_html=True)
+st.markdown(dynamic_css, unsafe_allow_html=True)
 
 # ==========================================
 # 5. MODALUL DE SETĂRI NATIV (ST.DIALOG)
@@ -449,7 +454,7 @@ if st.session_state.current_posts:
             st.markdown(f"""
             <div class="mockup-container brand-twitter">
                 <div class="mockup-header">
-                    <div class="mockup-avatar" style="border-radius:10px;"></div>
+                    <div class="mockup-avatar" style="border-radius:10px;">}</div>
                     <div><p class="mockup-name">Brand Account <span style="color:#38bdf8;">✔</span></p><p class="mockup-meta">@brand_hub • 1m</p></div>
                 </div>
                 <div class="mockup-content">{st.session_state.current_posts['twitter']}</div>
