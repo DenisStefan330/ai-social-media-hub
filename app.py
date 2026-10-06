@@ -158,9 +158,7 @@ theme_background_rule = ""
 if st.session_state.theme_mode == "Light (Mod Luminos)":
     theme_background_rule = """
     [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.04) 0%, transparent 45%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.04) 0%, transparent 45%),
-                    #f8fafc !important;
+        background: #f8fafc !important;
         color: #0f172a !important;
     }
     .mockup-container { background-color: #ffffff !important; color: #0f172a !important; border: 1px solid #e2e8f0 !important; }
@@ -168,9 +166,7 @@ if st.session_state.theme_mode == "Light (Mod Luminos)":
 elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     theme_background_rule = """
     [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.08) 0%, transparent 50%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
-                    #090d16 !important;
+        background: #090d16 !important;
         color: #f8fafc !important;
     }
     .mockup-container { background-color: #111827 !important; color: #f8fafc !important; border: 1px solid #1f2937 !important; }
@@ -178,9 +174,7 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
 else:
     theme_background_rule = """
     [data-testid="stAppViewContainer"] {
-        background: radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
-                    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
-                    var(--background-color) !important;
+        background: var(--background-color) !important;
     }
     .mockup-container {
         background-color: var(--secondary-background-color) !important;
@@ -190,7 +184,7 @@ else:
     """
 
 # ==========================================
-# 4. INJECTARE CSS ÎNCAPSULAT (FĂRĂ COD PUR ÎN PYTHON)
+# 4. INJECTARE CSS STABIL ȘI CURAT
 # ==========================================
 
 st.markdown("""
@@ -199,57 +193,35 @@ st.markdown("""
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif !important;
     }
-    
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(16px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
 
     .animated-title {
         background: linear-gradient(135deg, #2563eb 0%, #06b6d4 50%, #7c3aed 100%);
-        background-size: 200% auto;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        animation: shineGradient 6s linear infinite;
         font-weight: 800;
-    }
-    @keyframes shineGradient {
-        to { background-position: 200% center; }
     }
     
     .stButton button {
         background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
         color: white !important;
         font-weight: 600 !important;
-        border-radius: 14px !important;
-        padding: 0.8rem 1.2rem !important;
+        border-radius: 12px !important;
+        padding: 0.7rem 1.2rem !important;
         border: none !important;
         width: 100% !important;
-        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    .stButton button:hover {
-        opacity: 0.95;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(6, 182, 212, 0.4);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
     }
 
     .mockup-container {
-        border-radius: 18px;
+        border-radius: 16px;
         padding: 24px;
         margin-bottom: 24px;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
         line-height: 1.6;
-        animation: fadeInUp 0.5s ease-out forwards;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
         position: relative;
     }
-    .mockup-container:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-    }
     .mockup-header { display: flex; align-items: center; margin-bottom: 16px; }
-    .mockup-avatar { width: 44px; height: 44px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }
+    .mockup-avatar { width: 42px; height: 42px; border-radius: 50%; background: #94a3b8; margin-right: 12px; }
     .mockup-name { font-weight: 700; font-size: 16px !important; margin: 0; }
     .mockup-meta { font-size: 13px !important; opacity: 0.7; margin: 0; }
     .brand-linkedin { border-top: 4px solid #0a66c2; }
@@ -266,7 +238,6 @@ st.markdown("""
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s;
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -347,7 +318,7 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# 7. HEADER PRINCIPAL CU TITLU ANIMAT ȘI ROTIȚĂ ⚙️
+# 7. HEADER PRINCIPAL CU TITLU & ROTIȚĂ ⚙️
 # ==========================================
 
 head_col1, head_col2 = st.columns([11, 1])
@@ -375,9 +346,9 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
-        st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
+        st.error("⚠️️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
         st.session_state.current_topic = topic_input
         st.session_state.current_image = None
@@ -492,7 +463,7 @@ if st.session_state.current_posts:
             render_social_mockup(
                 "Twitter", "brand-twitter", "10px", 
                 'Brand Account <span style="color:#38bdf8;">✔</span>', "@brand_hub • 1m", 
-                st.session_state.current_posts['twitter']</i>
+                st.session_state.current_posts['twitter']
             )
             
         if st.session_state.current_posts['instagram']:
