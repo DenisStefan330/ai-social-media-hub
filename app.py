@@ -356,7 +356,7 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE ȘI MOCKUPS (DOM Validat Corect)
+# 9. AFIȘARE REZULTATE ȘI MOCKUPS
 # ==========================================
 
 if st.session_state.current_posts:
@@ -400,14 +400,10 @@ if st.session_state.current_posts:
             </div>
             """, unsafe_allow_html=True)
             
-        # Instagram Mockup (Taguri corectate: p închis cu p, fără div rezidual)
+        # Instagram Mockup (Antetul complet a fost scos de tot pentru a asigura stabilitate totală a DOM-ului)
         if st.session_state.current_posts['instagram']:
             st.markdown(f"""
             <div class="mockup-container brand-instagram">
-                <div class="mockup-header">
-                    <div class="mockup-avatar"></div>
-                    <div><p class="mockup-name">social_hub_official</p></div>
-                </div>
                 <div class="mockup-content"><b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}</div>
             </div>
             """, unsafe_allow_html=True)
