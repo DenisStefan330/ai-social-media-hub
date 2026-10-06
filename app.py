@@ -159,7 +159,7 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     """
 
 # ==========================================
-# 4. DESIGN CSS DINAMIC
+# 4. DESIGN CSS CURAT & ÎNCAPSULAT
 # ==========================================
 
 st.markdown(f"""
@@ -292,7 +292,7 @@ generate_btn = st.button(t['btn_gen'])
 
 if generate_btn:
     if not topic_input.strip():
-        st.warning("⚠️ Te rog să introduci un subiect sau un link valid.")
+        st.warning("⚠️️ Te rog să introduci un subiect sau un link valid.")
     elif not GROQ_API_KEY:
         st.error("⚠️ Cheia Groq API lipsește din Streamlit Secrets.")
     else:
