@@ -133,7 +133,7 @@ UI_TEXTS = {
         "btn_gen": "✨ Generate Campaign",
         "sidebar_title": "💬 Post History",
         "new_chat": "➕ New Post",
-        "settings_title": "⚙️ Settings & Preferences",
+        "settings_title": "⚙️️ Settings & Preferences",
         "font_size_label": "🔤 Post Text Font Size",
         "ui_lang_label": "🌐 Interface Language",
         "theme_label": "🌓 Theme Mode (Light / Dark)",
@@ -159,13 +159,14 @@ elif st.session_state.theme_mode == "Dark (Mod Întunecat)":
     """
 
 # ==========================================
-# 4. DESIGN CSS CURAT & ÎNCAPSULAT
+# 4. DESIGN CSS IZOLAT ȘI CURAT
 # ==========================================
 
 st.markdown(f"""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-    html, body, [class*="css"] {{
+    /* Stiluri izolate strict pe componentele aplicației */
+    .stApp {{
         font-family: 'Inter', sans-serif !important;
     }}
     
@@ -356,7 +357,7 @@ if generate_btn:
         st.rerun()
 
 # ==========================================
-# 9. AFIȘARE REZULTATE ȘI MOCKUPS
+# 9. AFIȘARE REZULTATE ȘI MOCKUPS (DOM Validat)
 # ==========================================
 
 if st.session_state.current_posts:
