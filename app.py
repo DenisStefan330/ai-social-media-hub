@@ -190,7 +190,7 @@ else:
     """
 
 # ==========================================
-# 4. INJECTARE CSS ROBUST ȘI COMPONENTĂ COPY
+# 4. INJECTARE CSS SIGURĂ (CU TAG-URI <style> EXPLICITE)
 # ==========================================
 
 st.markdown("""
@@ -257,7 +257,6 @@ st.markdown("""
     .brand-instagram { border-top: 4px solid #e1306c; }
     .mockup-content { white-space: pre-wrap; margin-bottom: 1rem; }
     
-    /* Stil pentru butonul intern de copiere clipboard */
     .copy-clipboard-btn {
         background: rgba(59, 130, 246, 0.1);
         color: #2563eb;
@@ -461,7 +460,6 @@ if st.session_state.current_posts:
         st.caption(st.session_state.current_posts['img_prompt'])
 
     with col_posts:
-        # Funcție helper pentru randarea mochetei cu buton JavaScript de copiere în clipboard
         def render_social_mockup(platform_name, brand_class, avatar_radius, author_title, author_meta, post_text):
             safe_text_js = post_text.replace("`", "\\`").replace('"', '\\"').replace("\n", "\\n")
             html_code = f"""
@@ -484,14 +482,12 @@ if st.session_state.current_posts:
             """
             st.markdown(html_code, unsafe_allow_html=True)
 
-        # Randare card LinkedIn
         render_social_mockup(
             "LinkedIn", "brand-linkedin", "50%", 
             "Professional Profile", "Acum • 🌍", 
             st.session_state.current_posts['linkedin']
         )
         
-        # Randare card Twitter / X
         if st.session_state.current_posts['twitter']:
             render_social_mockup(
                 "Twitter", "brand-twitter", "10px", 
@@ -499,7 +495,6 @@ if st.session_state.current_posts:
                 st.session_state.current_posts['twitter']
             )
             
-        # Randare card Instagram
         if st.session_state.current_posts['instagram']:
             ig_content = f"<b>social_hub_official</b> {st.session_state.current_topic or 'Post'} {st.session_state.current_posts['instagram']}"
             render_social_mockup(
