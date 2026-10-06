@@ -36,42 +36,23 @@ def scrape_url_content(url: str) -> str:
     except Exception as e:
         raise Exception(f"Eroare la citirea link-ului: {str(e)}")
 
-def get_best_available_model(client) -> str:
-    """
-    Interoghează dinamic modelele Groq disponibile, excluzând modelele de tip guard sau embed.
-    """
-    fallback_models = [
-        "llama-3.1-8b-instant",
-        "llama-3.2-3b-preview",
-        "llama-3.2-1b-preview",
-        "llama-3.3-70b-versatile",
-        "llama3-8b-8192"
-    ]
-    try:
-        models_response = client.models.list()
-        # Filtrăm strict doar modelele Llama de chat, evitând modelele de gardă/moderare sau embedding
-        available_ids = [
-            m.id for m in models_response.data 
-            if "llama" in m.id.lower() 
-            and "guard" not in m.id.lower() 
-            and "embed" not in m.id.lower()
-        ]
-        for model in fallback_models:
-            if model in available_ids:
-                return model
-        if available_ids:
-            return available_ids[0]
-    except Exception:
-        pass
-    return "llama-3.1-8b-instant"
-
 def stream_groq_text(prompt: str, api_key: str):
     if not api_key or not api_key.startswith("gsk_"):
         raise Exception("Cheia Groq API este invalidă sau lipsește. Verifică în setările de pe Streamlit Cloud dacă ai setat corect 'GROQ_API_KEY' (trebuie să înceapă cu 'gsk_').")
 
     client = groq.Groq(api_key=api_key)
-    active_model = get_best_available_model(client)
-
+    
+    # Listă bulletproof în cascadă cu toate modelele suportate de Groq
+    candidate_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama-3.1-70b-versatile",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768",
+        "gemma2-9b-it"
+    ]
+    
     system_prompt = (
         "You are an elite, hard-hitting B2B Social Media Content Strategist and Growth Hacker. "
         "Your task is to write hyper-engaging, highly specific, data-backed, and opinionated social media posts. "
@@ -86,20 +67,25 @@ def stream_groq_text(prompt: str, api_key: str):
         "[IMG_PROMPT]\n...1 highly detailed professional cinematic visual prompt in English for FLUX...\n"
     )
     
-    try:
-        stream = client.chat.completions.create(
-            model=active_model,
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.75, 
-            max_tokens=2000, 
-            stream=True
-        )
-        for chunk in stream:
-            if chunk.choices[0].delta.content is not None:
-                yield chunk.choices[0].delta.content
-                
-    except Exception as api_err:
-        raise Exception(f"Eroare Groq API (Model: {active_model}): Detalii: {str(api_err)}")
+    last_exception = None
+    for model_name in candidate_models:
+        try:
+            stream = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+                temperature=0.75, 
+                max_tokens=2000, 
+                stream=True
+            )
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+            return # Ișim din funcție imediat ce un model a funcționat cu succes
+        except Exception as e:
+            last_exception = e
+            continue
+            
+    raise Exception(f"Toate modelele Groq încercate au eșuat. Verifică activarea cheii în Groq Console. Detalii: {str(last_exception)}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
