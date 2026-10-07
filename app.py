@@ -138,7 +138,7 @@ ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret(
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
 # ==============================================================================
-# 4. BACKEND: JINA, DUCKDUCKGO & DEEP-DIVE MULTILINGUAL GROQ
+# 4. BACKEND: JINA, DUCKDUCKGO & BULLET-PROOF MULTI-MODEL GROQ
 # ==============================================================================
 def fetch_context_data(topic_input: str) -> str:
     is_url = topic_input.strip().startswith("http")
@@ -181,39 +181,20 @@ def get_robust_value(d: dict, *keys) -> str:
                 return str(val)
     return ""
 
-def select_best_groq_model(client: groq.Groq) -> str:
-    try:
-        models_response = client.models.list()
-        excluded_keywords = ["audio", "whisper", "embed", "tts", "stt", "vision", "orpheus", "guard", "rerank"]
-        valid_models = []
-        
-        for m in models_response.data:
-            m_id_lower = m.id.lower()
-            if not any(kw in m_id_lower for kw in excluded_keywords):
-                valid_models.append(m.id)
-                
-        for pattern in ["llama-3.3", "llama-3.1"]:
-            matches = [mid for mid in valid_models if pattern in mid.lower()]
-            if matches:
-                return matches[0]
-                
-        if valid_models:
-            return valid_models[0]
-    except Exception:
-        pass
-    
-    return "llama-3.3-70b-versatile"
-
 def generate_groq_campaign(prompt: str, api_key: str) -> dict:
     if not api_key or not api_key.startswith("gsk_"):
         raise Exception("Cheia Groq API este invalidă sau lipsește.")
 
     client = groq.Groq(api_key=api_key)
-    dynamic_model = select_best_groq_model(client)
-    candidate_models = [dynamic_model, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-    candidate_models = list(dict.fromkeys(candidate_models))
     
-    # 🌟 System prompt perfecționat: Aplică strict tonul, elimina generalitățile, impune profunzime tactică
+    # Listă robustă cu modele active de producție actualizate (GPT-OSS și LLaMA)
+    candidate_models = [
+        "openai/gpt-oss-20b",
+        "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "llama-3.1-8b-instant"
+    ]
+    
     system_prompt = (
         "You are an elite, hard-hitting B2B Content Strategist, Copywriter and Growth Hacker. "
         "CRITICAL RULE 1: YOU MUST RESPOND EXCLUSIVELY WITH A SINGLE VALID JSON OBJECT (starting with { and ending with }). "
@@ -237,16 +218,21 @@ def generate_groq_campaign(prompt: str, api_key: str) -> dict:
     last_error = None
     for model_name in candidate_models:
         try:
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
+            kwargs = {
+                "model": model_name,
+                "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.75,
-                max_tokens=1500,  # Asigură spațiu generos pentru conținut profund și detaliat
-                response_format={"type": "json_object"}
-            )
+                "temperature": 0.75,
+                "response_format": {"type": "json_object"}
+            }
+            if "gpt-oss" in model_name:
+                kwargs["max_completion_tokens"] = 1500
+            else:
+                kwargs["max_tokens"] = 1500
+
+            completion = client.chat.completions.create(**kwargs)
             raw_content = completion.choices[0].message.content
             return sanitize_json_output(raw_content)
         except Exception as e:
