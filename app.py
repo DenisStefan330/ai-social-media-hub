@@ -138,7 +138,7 @@ ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret(
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
 # ==============================================================================
-# 4. BACKEND: JINA, DUCKDUCKGO & BULLET-PROOF MULTILINGUAL GROQ
+# 4. BACKEND: JINA, DUCKDUCKGO & DEEP-DIVE MULTILINGUAL GROQ
 # ==============================================================================
 def fetch_context_data(topic_input: str) -> str:
     is_url = topic_input.strip().startswith("http")
@@ -147,13 +147,13 @@ def fetch_context_data(topic_input: str) -> str:
             jina_url = f"https://r.jina.ai/{topic_input.strip()}"
             response = requests.get(jina_url, timeout=12)
             response.raise_for_status()
-            return f"ARTICOL EXTRACTS:\n{response.text[:5000]}"
+            return f"ARTICOL EXTRACTS:\n{response.text[:6000]}"
         except Exception as e:
             raise Exception(f"Eroare Jina AI: {str(e)}")
     else:
         try:
             with DDGS() as ddgs:
-                results = [r.get('body', '') for r in ddgs.text(topic_input, max_results=3)]
+                results = [r.get('body', '') for r in ddgs.text(topic_input, max_results=4)]
                 search_context = "\n".join(results) if results else "Niciun rezultat extern."
             return f"SUBIECT: {topic_input}\nCONTEXT WEB ACTUAL (TRENDS & NEWS):\n{search_context}"
         except Exception:
@@ -173,7 +173,6 @@ def sanitize_json_output(raw_text: str) -> dict:
     return json.loads(cleaned)
 
 def get_robust_value(d: dict, *keys) -> str:
-    """Caută în dicționar cheile specificate, ignorând majusculele/minusculele."""
     if not isinstance(d, dict):
         return ""
     for k in keys:
@@ -214,18 +213,25 @@ def generate_groq_campaign(prompt: str, api_key: str) -> dict:
     candidate_models = [dynamic_model, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     candidate_models = list(dict.fromkeys(candidate_models))
     
-    # 🌟 System prompt în limba engleză cu directivă strictă multilingvă și evitare trunchiere
+    # 🌟 System prompt perfecționat: Aplică strict tonul, elimina generalitățile, impune profunzime tactică
     system_prompt = (
-        "You are an elite B2B Content Strategist and Growth Hacker. "
+        "You are an elite, hard-hitting B2B Content Strategist, Copywriter and Growth Hacker. "
         "CRITICAL RULE 1: YOU MUST RESPOND EXCLUSIVELY WITH A SINGLE VALID JSON OBJECT (starting with { and ending with }). "
         "DO NOT use arrays (lists with square brackets) at the root level or inside values. "
         "All values must be simple strings (use \\n for line breaks).\n\n"
-        "CRITICAL RULE 2 (LANGUAGE): You MUST generate the content of all social media posts in the exact language specified under 'LANGUAGE FOR CONTENT' in the user prompt (e.g. if 'Română', write in Romanian; if 'English', write in English; if 'Français', write in French, etc.).\n\n"
+        "CRITICAL RULE 2 (LANGUAGE): You MUST generate all text content in the exact language specified under 'LANGUAGE FOR CONTENT' in the user prompt.\n\n"
+        "CRITICAL RULE 3 (TONE & DEPTH - NO GENERALITIES): "
+        "You must strictly adapt the psychological and linguistic angle based on the 'TONE' specified in the prompt: "
+        "- If 'Profesional & Analitic': Use hard data, industry frameworks, structured bullet points, and authoritative metrics. Avoid fluff. "
+        "- If 'Casual & Prietenos': Use conversational, direct phrasing, engaging storytelling, and relatable hooks without corporate jargon. "
+        "- If 'Provocator': Start immediately with a controversial hook, an industry taboo, or an uncomfortable truth backed by logic. "
+        "- If 'Educațional': Provide a step-by-step actionable framework, clear takeaways, and concrete execution steps. "
+        "NEVER write generic intros or cliché fluff like 'In today's fast-paced world' or 'Excited to announce'. Dive straight into the core value.\n\n"
         "Mandatory keys in the JSON object:\n"
-        "1. 'linkedin': complete professional LinkedIn post text as a single string.\n"
-        "2. 'twitter': complete Twitter thread text as a single string, with tweets separated by \\n\\n.\n"
-        "3. 'instagram': complete Instagram caption and on-screen text instructions as a single string.\n"
-        "4. 'img_prompt': a detailed visual prompt in English for FLUX as a single string."
+        "1. 'linkedin': An extensive, deeply detailed professional post with strong hooks, tactical body breakdown, bullet points, and high-converting CTA.\n"
+        "2. 'twitter': A multi-tweet thread (3-5 tweets) with dense, high-impact insights, separated by \\n\\n.\n"
+        "3. 'instagram': A rich, narrative caption optimized for visual storytelling, including clear on-screen text direction and relevant niche hashtags.\n"
+        "4. 'img_prompt': A highly detailed, professional cinematic visual prompt in English for FLUX (non-stock, modern)."
     )
     
     last_error = None
@@ -238,7 +244,7 @@ def generate_groq_campaign(prompt: str, api_key: str) -> dict:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.75,
-                max_tokens=1024,  # Optimizat pentru a preveni trunchierea JSON-ului
+                max_tokens=1500,  # Asigură spațiu generos pentru conținut profund și detaliat
                 response_format={"type": "json_object"}
             )
             raw_content = completion.choices[0].message.content
@@ -372,7 +378,6 @@ if generate_btn:
         with st.spinner(t['spinner_gen']):
             parsed_json = generate_groq_campaign(prompt, ACTIVE_GROQ_KEY)
             
-        # Folosim extragerea robustă case-insensitive pentru a asigura popularea tuturor tab-urilor
         st.session_state.current_posts = {
             "linkedin": get_robust_value(parsed_json, "linkedin", "li"),
             "twitter": get_robust_value(parsed_json, "twitter", "tw", "x"),
