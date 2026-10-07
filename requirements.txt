@@ -1,4 +1,6 @@
 streamlit>=1.40.0
-requests
 groq
+requests
 beautifulsoup4
+duckduckgo-search
+streamlit-local-storage
