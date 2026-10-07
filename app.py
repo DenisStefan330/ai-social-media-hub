@@ -20,7 +20,7 @@ st.set_page_config(
 # Initialize Local Storage manager
 localS = LocalStorage()
 
-# Initialize Session State variables synchronized or defaulted safely
+# Initialize Session State variables
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
 if "history" not in st.session_state:
@@ -58,16 +58,16 @@ UI_TEXTS = {
         "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul agentic AI în corporații",
         "lang_label": "🌐 Limba Conținutului",
         "tone_label": "⚡ Tonul Campaniei",
-        "persona_label": "🎭 Brand Persona (Opțional)",
-        "persona_placeholder": "Ex: Fii sarcastic, folosește tonul unui antreprenor tech b2b...",
+        "persona_label": "🎭 Brand Persona / Nișă (Opțional)",
+        "persona_placeholder": "Ex: Nișa B2B SaaS, folosește tonul unui fondator tech...",
         "toggle_img": "🎨 Generare Imagine (FLUX AI)",
         "btn_gen": "✨ Generează Postările",
         "results_header": "📱 Vizualizare și Export",
         "tab_li": "💼 LinkedIn",
-        "tab_tw": "🐦 Twitter",
+        "tab_tw": "🐦 Twitter (Thread)",
         "tab_ig": "📸 Instagram",
         "tab_img": "🖼️ Vizual Generat",
-        "img_prompt_label": "**Prompt vizual AI:**",
+        "img_prompt_label": "**Prompt vizual AI (FLUX):**",
         "download_img": "📥 Descarcă JPG",
         "download_all": "📦 Descarcă Toate Postările (.txt)",
         "empty_history": "Nicio postare salvată în istoric.",
@@ -75,7 +75,7 @@ UI_TEXTS = {
         "warning_empty": "⚠️ Te rog să introduci un subiect sau un link valid.",
         "spinner_jina": "🌍 Extragem datele prin Jina AI Reader...",
         "spinner_ddg": "🔍 Căutăm știri relevante pe DuckDuckGo...",
-        "spinner_gen": "🧠 Nexus AI generează conținutul strategic...",
+        "spinner_gen": "🧠 Nexus AI generează campania strategică...",
         "spinner_flux": "🎨 Se sintetizează imaginea prin FLUX...",
         "toast_success": "🚀 Campania a fost generată cu succes!",
         "error_json": "Eroare: Răspunsul AI nu a putut fi decodat în JSON valid.",
@@ -99,16 +99,16 @@ UI_TEXTS = {
         "input_placeholder": "Ex: https://techcrunch.com/... OR The future of agentic AI in enterprise",
         "lang_label": "🌐 Content Language",
         "tone_label": "⚡ Campaign Tone",
-        "persona_label": "🎭 Brand Persona (Optional)",
-        "persona_placeholder": "Ex: Be sarcastic, speak like a B2B SaaS founder...",
+        "persona_label": "🎭 Brand Persona / Niche (Optional)",
+        "persona_placeholder": "Ex: B2B SaaS niche, speak like a tech founder...",
         "toggle_img": "🎨 Generate Image (FLUX AI)",
         "btn_gen": "✨ Generate Posts",
         "results_header": "📱 View & Export",
         "tab_li": "💼 LinkedIn",
-        "tab_tw": "🐦 Twitter",
+        "tab_tw": "🐦 Twitter (Thread)",
         "tab_ig": "📸 Instagram",
         "tab_img": "🖼️ Generated Visual",
-        "img_prompt_label": "**AI Visual Prompt:**",
+        "img_prompt_label": "**AI Visual Prompt (FLUX):**",
         "download_img": "📥 Download JPG",
         "download_all": "📦 Download All Posts (.txt)",
         "empty_history": "No saved posts in history.",
@@ -116,7 +116,7 @@ UI_TEXTS = {
         "warning_empty": "⚠️ Please enter a valid subject or link.",
         "spinner_jina": "🌍 Extracting data via Jina AI Reader...",
         "spinner_ddg": "🔍 Searching recent news via DuckDuckGo...",
-        "spinner_gen": "🧠 Nexus AI is crafting your strategic content...",
+        "spinner_gen": "🧠 Nexus AI is crafting your strategic campaign...",
         "spinner_flux": "🎨 Synthesizing visual via FLUX...",
         "toast_success": "🚀 Campaign generated successfully!",
         "error_json": "Error: AI response could not be parsed into valid JSON.",
@@ -157,30 +157,31 @@ def fetch_context_data(topic_input: str) -> str:
             with DDGS() as ddgs:
                 results = [r.get('body', '') for r in ddgs.text(topic_input, max_results=3)]
                 search_context = "\n".join(results) if results else "Niciun rezultat extern."
-            return f"SUBIECT: {topic_input}\nCONTEXT WEB ACTUAL:\n{search_context}"
+            return f"SUBIECT: {topic_input}\nCONTEXT WEB ACTUAL (TRENDS & NEWS):\n{search_context}"
         except Exception:
             return f"SUBIECT: {topic_input}"
 
 def select_best_groq_model(client: groq.Groq) -> str:
     try:
         models_response = client.models.list()
-        model_ids = [m.id for m in models_response.data]
+        # Filtrare strictă: excludem modelele audio/whisper/embeddings
+        valid_models = [
+            m.id for m in models_response.data 
+            if not any(x in m.id.lower() for x in ["whisper", "audio", "embed", "tts", "stt", "vision"])
+        ]
         
-        # Priority filter sequence requested
         for pattern in ["llama-3.3", "llama-3.1", "mixtral", "llama3"]:
-            matches = [mid for mid in model_ids if pattern in mid.lower()]
+            matches = [mid for mid in valid_models if pattern in mid.lower()]
             if matches:
                 return matches[0]
                 
-        if model_ids:
-            return model_ids[0]
-        raise Exception(t["no_models"])
+        if valid_models:
+            return valid_models[0]
+        return "llama-3.3-70b-versatile"
     except Exception:
-        # Fallback hardcoded list if list() fails due to permissions/network
         return "llama-3.3-70b-versatile"
 
 def sanitize_json_output(raw_text: str) -> dict:
-    # 🔹 Sanitizer: strip markdown code blocks and extract from first '{' to last '}'
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned).strip()
     
@@ -200,12 +201,19 @@ def generate_groq_campaign(prompt: str, api_key: str):
     client = groq.Groq(api_key=api_key)
     chosen_model = select_best_groq_model(client)
     
+    # 🌟 NOUL PROMPT STRATEGIC DE ELITĂ (DEMAND GENERATION & CONTRARIAN TAKES)
     system_prompt = (
-        "You are an elite B2B Social Media Content Strategist and Growth Hacker. "
-        "Write hyper-engaging, highly specific, data-backed social media campaigns. "
-        "CRITICAL: YOU MUST RESPOND EXCLUSIVELY IN VALID JSON FORMAT. "
-        "No conversational text outside the JSON object. "
-        "Keys required: 'linkedin' (string), 'twitter' (string), 'instagram' (string), 'img_prompt' (string for FLUX image generator in English)."
+        "Ești un Strateg de Conținut B2B de elită și Growth Hacker specializat în generarea de cereri (demand generation) "
+        "și poziționare de brand pe canale multiple. Sarcina ta este să creezi campanii de social media hiper-engaginge, "
+        "extrem de specifice, bazate pe date și tendințe actuale.\n\n"
+        "Campania trebuie să evite clișeele și limbajul de lemn corporatist, punând accent pe valoare practică, "
+        "perspective nepopulare dar argumentate (contrarian takes) și studii de caz reale.\n\n"
+        "CRITICAL: TREBUIE SĂ RĂSPUNZI EXCLUSIV ÎN FORMAT JSON VALID. Fără text conversațional în afara obiectului JSON.\n\n"
+        "Chei obligatorii în structura JSON:\n"
+        "1. 'linkedin': Un text lung, structurat tip fir logic (hook puternic, corp cu puncte clare bazate pe date/experiență, call-to-action de conversie), optimizat pentru algoritmii actuali de engagement profesional.\n"
+        "2. 'twitter': O serie conectată (thread) de 3 până la 5 tweet-uri cu o idee densă, concisă și cu impact vizual ridicat pe linie de growth.\n"
+        "3. 'instagram': O descriere (caption) dinamică, orientată vizual și narativ, incluzând sugestii clare pentru textul afișat pe ecran (on-screen text).\n"
+        "4. 'img_prompt': Un prompt detaliat în limba engleză, optimizat pentru generatoare avansate de imagini (FLUX), descriind o vizualizare curată, modernă, non-stock, relevantă pentru tema postării."
     )
     
     completion = client.chat.completions.create(
@@ -214,8 +222,8 @@ def generate_groq_campaign(prompt: str, api_key: str):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.7,
-        max_tokens=2000,
+        temperature=0.75,
+        max_tokens=2500,
         response_format={"type": "json_object"}
     )
     
@@ -265,7 +273,6 @@ with st.sidebar:
         
     st.markdown("---")
     
-    # Visual Energy Bar / Unlimited status
     if is_unlimited:
         st.success(t['unlimited_badge'])
     else:
@@ -290,7 +297,6 @@ with col_settings:
     if st.button(t['settings_btn'], help="Settings"):
         settings_modal()
 
-# 🔹 Card Layout: Campaign Configuration Form
 with st.container(border=True):
     st.markdown(f"#### {t['config_header']}")
     
@@ -326,7 +332,6 @@ if generate_btn:
         
     st.session_state.current_topic = topic_input
     
-    # Context Retrieval via Jina AI or DuckDuckGo
     is_url = topic_input.strip().startswith("http")
     spinner_text = t['spinner_jina'] if is_url else t['spinner_ddg']
     
@@ -338,10 +343,10 @@ if generate_btn:
             st.stop()
             
     prompt = (
-        f"TARGET CONTEXT:\n{context_data}\n\n"
-        f"LANGUAGE FOR POSTS: {lang}\n"
+        f"TARGET SUBJECT / CONTEXT / NEWS:\n{context_data}\n\n"
+        f"LANGUAGE FOR CONTENT: {lang}\n"
         f"TONE: {tone}\n"
-        f"BRAND PERSONA INSTRUCTIONS: {brand_persona}\n"
+        f"NICHE / BRAND PERSONA DETAILS: {brand_persona}\n"
     )
     
     try:
@@ -352,16 +357,15 @@ if generate_btn:
             "linkedin": parsed_json.get("linkedin", ""),
             "twitter": parsed_json.get("twitter", ""),
             "instagram": parsed_json.get("instagram", ""),
-            "img_prompt": parsed_json.get("img_prompt", f"Professional corporate visual of {topic_input}, 8k")
+            "img_prompt": parsed_json.get("img_prompt", f"Professional modern visual representation of {topic_input}, 8k")
         }
     except json.JSONDecodeError:
         st.error(t['error_json'])
         st.stop()
     except Exception as api_err:
-        st.error(f"Eroare: {str(api_err)}")
+        st.error(f"Eroare API: {str(api_err)}")
         st.stop()
         
-    # Image Generation via Hugging Face FLUX
     st.session_state.current_image = None
     if generate_image_toggle and HUGGINGFACE_API_KEY:
         with st.spinner(t['spinner_flux']):
@@ -397,11 +401,11 @@ if st.session_state.current_posts:
             st.text_area("LinkedIn Content", value=st.session_state.current_posts['linkedin'], height=250, key="ta_li", label_visibility="collapsed")
             
         with tab_tw:
-            st.text_area("Twitter Content", value=st.session_state.current_posts['twitter'], height=150, key="ta_tw", label_visibility="collapsed")
+            st.text_area("Twitter Thread", value=st.session_state.current_posts['twitter'], height=200, key="ta_tw", label_visibility="collapsed")
             
         with tab_ig:
             ig_full = f"nexus_social_official {st.session_state.current_topic}\n\n{st.session_state.current_posts['instagram']}"
-            st.text_area("Instagram Content", value=ig_full, height=200, key="ta_ig", label_visibility="collapsed")
+            st.text_area("Instagram Caption", value=ig_full, height=200, key="ta_ig", label_visibility="collapsed")
             
         with tab_img:
             if st.session_state.current_image:
@@ -418,7 +422,7 @@ if st.session_state.current_posts:
         st.markdown("---")
         full_export = (
             f"=== LINKEDIN ===\n{st.session_state.current_posts['linkedin']}\n\n"
-            f"=== TWITTER ===\n{st.session_state.current_posts['twitter']}\n\n"
+            f"=== TWITTER THREAD ===\n{st.session_state.current_posts['twitter']}\n\n"
             f"=== INSTAGRAM ===\n{st.session_state.current_posts['instagram']}"
         )
         st.download_button(t['download_all'], data=full_export, file_name="nexus_campaign.txt", mime="text/plain")
