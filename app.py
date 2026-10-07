@@ -79,7 +79,7 @@ UI_TEXTS = {
         "spinner_flux": "🎨 Se sintetizează imaginea prin FLUX...",
         "toast_success": "🚀 Campania a fost generată cu succes!",
         "error_json": "Eroare: Răspunsul AI nu a putut fi decodat în JSON valid.",
-        "no_models": "Nu s-a găsit niciun model Groq compatibil disponibil pe această cheie."
+        "no_models": "Toate modelele sigure au eșuat."
     },
     "English": {
         "app_title": "Nexus Social AI",
@@ -120,7 +120,7 @@ UI_TEXTS = {
         "spinner_flux": "🎨 Synthesizing visual via FLUX...",
         "toast_success": "🚀 Campaign generated successfully!",
         "error_json": "Error: AI response could not be parsed into valid JSON.",
-        "no_models": "No compatible Groq models available for this API key."
+        "no_models": "All secure models failed."
     }
 }
 
@@ -140,7 +140,7 @@ ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret(
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
 # ==============================================================================
-# 4. BACKEND: JINA AI READER, DUCKDUCKGO & AUTO-HEALING GROQ
+# 4. BACKEND: JINA AI READER, DUCKDUCKGO & SAFE FALLBACK GROQ
 # ==============================================================================
 def fetch_context_data(topic_input: str) -> str:
     is_url = topic_input.strip().startswith("http")
@@ -161,25 +161,6 @@ def fetch_context_data(topic_input: str) -> str:
         except Exception:
             return f"SUBIECT: {topic_input}"
 
-def select_best_groq_model(client: groq.Groq) -> str:
-    try:
-        models_response = client.models.list()
-        valid_models = [
-            m.id for m in models_response.data 
-            if not any(x in m.id.lower() for x in ["whisper", "audio", "embed", "tts", "stt", "vision"])
-        ]
-        
-        for pattern in ["llama-3.3", "llama-3.1", "mixtral", "llama3"]:
-            matches = [mid for mid in valid_models if pattern in mid.lower()]
-            if matches:
-                return matches[0]
-                
-        if valid_models:
-            return valid_models[0]
-        return "llama-3.3-70b-versatile"
-    except Exception:
-        return "llama-3.3-70b-versatile"
-
 def sanitize_json_output(raw_text: str) -> dict:
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned).strip()
@@ -198,7 +179,13 @@ def generate_groq_campaign(prompt: str, api_key: str):
         raise Exception("Cheia Groq API este invalidă sau lipsește.")
 
     client = groq.Groq(api_key=api_key)
-    chosen_model = select_best_groq_model(client)
+    
+    # Listă curată și strict verificată de modele de producție pentru chat & JSON mode
+    candidate_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768"
+    ]
     
     system_prompt = (
         "Ești un Strateg de Conținut B2B de elită și Growth Hacker. "
@@ -212,19 +199,26 @@ def generate_groq_campaign(prompt: str, api_key: str):
         "4. 'img_prompt': un prompt detaliat în limba engleză pentru FLUX ca un singur string."
     )
     
-    completion = client.chat.completions.create(
-        model=chosen_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=2500,
-        response_format={"type": "json_object"}
-    )
-    
-    raw_content = completion.choices[0].message.content
-    return sanitize_json_output(raw_content)
+    last_error = None
+    for model_name in candidate_models:
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.75,
+                max_tokens=2500,
+                response_format={"type": "json_object"}
+            )
+            raw_content = completion.choices[0].message.content
+            return sanitize_json_output(raw_content)
+        except Exception as e:
+            last_error = str(e)
+            continue
+            
+    raise Exception(f"Toate modelele sigure au eșuat. Detalii: {last_error}")
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
