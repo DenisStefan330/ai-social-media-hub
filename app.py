@@ -17,10 +17,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Local Storage manager
 localS = LocalStorage()
 
-# Initialize Session State variables
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
 if "history" not in st.session_state:
@@ -140,7 +138,7 @@ ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret(
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
 # ==============================================================================
-# 4. BACKEND: JINA AI READER, DUCKDUCKGO & SAFE FALLBACK GROQ
+# 4. BACKEND: JINA AI READER, DUCKDUCKGO & BULLET-PROOF DYNAMIC GROQ
 # ==============================================================================
 def fetch_context_data(topic_input: str) -> str:
     is_url = topic_input.strip().startswith("http")
@@ -174,19 +172,42 @@ def sanitize_json_output(raw_text: str) -> dict:
     
     return json.loads(cleaned)
 
+def select_best_groq_model(client: groq.Groq) -> str:
+    """Descoperă dinamic cel mai bun model text de pe Groq filtrând strict modelele audio/speciale."""
+    try:
+        models_response = client.models.list()
+        excluded_keywords = ["audio", "whisper", "embed", "tts", "stt", "vision", "orpheus", "guard", "rerank"]
+        valid_models = []
+        
+        for m in models_response.data:
+            m_id_lower = m.id.lower()
+            if not any(kw in m_id_lower for kw in excluded_keywords):
+                valid_models.append(m.id)
+                
+        # Căutăm prioritic modele standard de producție versatile sau instant
+        for pattern in ["llama-3.3", "llama-3.1"]:
+            matches = [mid for mid in valid_models if pattern in mid.lower()]
+            if matches:
+                return matches[0]
+                
+        if valid_models:
+            return valid_models[0]
+    except Exception:
+        pass
+    
+    # Fallback static garantat în caz de eroare la listare
+    return "llama-3.3-70b-versatile"
+
 def generate_groq_campaign(prompt: str, api_key: str):
     if not api_key or not api_key.startswith("gsk_"):
         raise Exception("Cheia Groq API este invalidă sau lipsește.")
 
     client = groq.Groq(api_key=api_key)
     
-    # Listă curată actualizată cu modele active de producție pentru chat & JSON mode
-    candidate_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "llama-3.1-70b-versatile",
-        "gemma2-9b-it"
-    ]
+    # Arhitectură Bullet-Proof: Model dinamic + candidați de rezervă verificați
+    dynamic_model = select_best_groq_model(client)
+    candidate_models = [dynamic_model, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    candidate_models = list(dict.fromkeys(candidate_models)) # elimină duplicatele păstrând ordinea
     
     system_prompt = (
         "Ești un Strateg de Conținut B2B de elită și Growth Hacker. "
