@@ -1,21 +1,26 @@
 import os
-import requests
+import re
 import json
+import requests
 import streamlit as st
-from bs4 import BeautifulSoup
 import groq
+from streamlit_local_storage import LocalStorage
+from duckduckgo_search import DDGS
 
-# ==========================================
-# 1. CONFIGURARE PAGINĂ & STATE INITIALIZATION
-# ==========================================
+# ==============================================================================
+# 1. PAGE CONFIGURATION & INITIALIZATION
+# ==============================================================================
 st.set_page_config(
-    page_title="AI Social Media Hub",
+    page_title="Nexus Social AI",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Inițializare Session State
+# Initialize Local Storage manager
+localS = LocalStorage()
+
+# Initialize Session State variables synchronized or defaulted safely
 if "ui_lang" not in st.session_state:
     st.session_state.ui_lang = "Română"
 if "history" not in st.session_state:
@@ -26,14 +31,104 @@ if "current_image" not in st.session_state:
     st.session_state.current_image = None
 if "current_topic" not in st.session_state:
     st.session_state.current_topic = ""
-if "quota_count" not in st.session_state:
-    st.session_state.quota_count = 0 
+if "daily_quota" not in st.session_state:
+    st.session_state.daily_quota = 0
 if "user_api_key" not in st.session_state:
     st.session_state.user_api_key = ""
 
-# ==========================================
-# 2. GESTIONARE SECURE A CHEILOR API
-# ==========================================
+# ==============================================================================
+# 2. COMPLETE i18n DICTIONARY (ZERO HARDCODED TEXT)
+# ==============================================================================
+UI_TEXTS = {
+    "Română": {
+        "app_title": "Nexus Social AI",
+        "app_sub": "Platformă Enterprise de Generare Conținut Multi-Platformă V2.0",
+        "sidebar_title": "💬 Meniul Tău",
+        "new_chat": "➕ Postare Nouă",
+        "settings_btn": "⚙️ Setări",
+        "settings_title": "⚙️ Setări & Preferințe",
+        "ui_lang_label": "🌐 Limba Interfeței",
+        "api_key_label": "Groq API Key Personal (Mod Nelimitat):",
+        "save_close": "Salvează & Închide",
+        "energy_label": "⚡ Energie Zilnică",
+        "energy_delta": "consumată",
+        "unlimited_badge": "🌟 Mod Nelimitat Activat",
+        "config_header": "🎯 Configurare Campanie",
+        "input_label": "🔗 Subiect detaliat, Întrebare sau URL Articol:",
+        "input_placeholder": "Ex: https://techcrunch.com/... SAU Viitorul agentic AI în corporații",
+        "lang_label": "🌐 Limba Conținutului",
+        "tone_label": "⚡ Tonul Campaniei",
+        "persona_label": "🎭 Brand Persona (Opțional)",
+        "persona_placeholder": "Ex: Fii sarcastic, folosește tonul unui antreprenor tech b2b...",
+        "toggle_img": "🎨 Generare Imagine (FLUX AI)",
+        "btn_gen": "✨ Generează Postările",
+        "results_header": "📱 Vizualizare și Export",
+        "tab_li": "💼 LinkedIn",
+        "tab_tw": "🐦 Twitter",
+        "tab_ig": "📸 Instagram",
+        "tab_img": "🖼️ Vizual Generat",
+        "img_prompt_label": "**Prompt vizual AI:**",
+        "download_img": "📥 Descarcă JPG",
+        "download_all": "📦 Descarcă Toate Postările (.txt)",
+        "empty_history": "Nicio postare salvată în istoric.",
+        "quota_exceeded": "❌ Ai atins limita de 3 generări zilnice. Introdu propria cheie Groq în Setări!",
+        "warning_empty": "⚠️ Te rog să introduci un subiect sau un link valid.",
+        "spinner_jina": "🌍 Extragem datele prin Jina AI Reader...",
+        "spinner_ddg": "🔍 Căutăm știri relevante pe DuckDuckGo...",
+        "spinner_gen": "🧠 Nexus AI generează conținutul strategic...",
+        "spinner_flux": "🎨 Se sintetizează imaginea prin FLUX...",
+        "toast_success": "🚀 Campania a fost generată cu succes!",
+        "error_json": "Eroare: Răspunsul AI nu a putut fi decodat în JSON valid.",
+        "no_models": "Nu s-a găsit niciun model Groq compatibil disponibil pe această cheie."
+    },
+    "English": {
+        "app_title": "Nexus Social AI",
+        "app_sub": "Enterprise Multi-Platform Content Generator V2.0",
+        "sidebar_title": "💬 Your Menu",
+        "new_chat": "➕ New Post",
+        "settings_btn": "⚙️ Settings",
+        "settings_title": "⚙️ Settings & Preferences",
+        "ui_lang_label": "🌐 Interface Language",
+        "api_key_label": "Custom Groq API Key (Unlimited Mode):",
+        "save_close": "Save & Close",
+        "energy_label": "⚡ Daily Energy",
+        "energy_delta": "consumed",
+        "unlimited_badge": "🌟 Unlimited Mode Active",
+        "config_header": "🎯 Campaign Configuration",
+        "input_label": "🔗 Detailed Subject, Query, or Article URL:",
+        "input_placeholder": "Ex: https://techcrunch.com/... OR The future of agentic AI in enterprise",
+        "lang_label": "🌐 Content Language",
+        "tone_label": "⚡ Campaign Tone",
+        "persona_label": "🎭 Brand Persona (Optional)",
+        "persona_placeholder": "Ex: Be sarcastic, speak like a B2B SaaS founder...",
+        "toggle_img": "🎨 Generate Image (FLUX AI)",
+        "btn_gen": "✨ Generate Posts",
+        "results_header": "📱 View & Export",
+        "tab_li": "💼 LinkedIn",
+        "tab_tw": "🐦 Twitter",
+        "tab_ig": "📸 Instagram",
+        "tab_img": "🖼️ Generated Visual",
+        "img_prompt_label": "**AI Visual Prompt:**",
+        "download_img": "📥 Download JPG",
+        "download_all": "📦 Download All Posts (.txt)",
+        "empty_history": "No saved posts in history.",
+        "quota_exceeded": "❌ You reached the daily limit of 3 free generations. Add your custom Groq API key in Settings!",
+        "warning_empty": "⚠️ Please enter a valid subject or link.",
+        "spinner_jina": "🌍 Extracting data via Jina AI Reader...",
+        "spinner_ddg": "🔍 Searching recent news via DuckDuckGo...",
+        "spinner_gen": "🧠 Nexus AI is crafting your strategic content...",
+        "spinner_flux": "🎨 Synthesizing visual via FLUX...",
+        "toast_success": "🚀 Campaign generated successfully!",
+        "error_json": "Error: AI response could not be parsed into valid JSON.",
+        "no_models": "No compatible Groq models available for this API key."
+    }
+}
+
+t = UI_TEXTS[st.session_state.ui_lang]
+
+# ==============================================================================
+# 3. SECURE SECRETS & API HANDLERS
+# ==============================================================================
 def get_secret(key_name: str) -> str:
     try:
         return st.secrets[key_name]
@@ -44,274 +139,286 @@ is_unlimited = bool(st.session_state.user_api_key.strip())
 ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret("GROQ_API_KEY")
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
-# ==========================================
-# 3. FUNCȚII DE BACKEND & ROBUST FALLBACK
-# ==========================================
-def scrape_url_content(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        title = soup.title.string if soup.title else "Articol"
-        content = " ".join([p.get_text() for p in soup.find_all('p')])
-        return f"TITLU: {title}\nCONȚINUT: {content[:4000]}"
-    except Exception as e:
-        raise Exception(f"Eroare la citirea link-ului: {str(e)}")
+# ==============================================================================
+# 4. BACKEND: JINA AI READER, DUCKDUCKGO & AUTO-HEALING GROQ
+# ==============================================================================
+def fetch_context_data(topic_input: str) -> str:
+    is_url = topic_input.strip().startswith("http")
+    if is_url:
+        try:
+            jina_url = f"https://r.jina.ai/{topic_input.strip()}"
+            response = requests.get(jina_url, timeout=12)
+            response.raise_for_status()
+            return f"ARTICOL EXTRACTS:\n{response.text[:5000]}"
+        except Exception as e:
+            raise Exception(f"Eroare Jina AI: {str(e)}")
+    else:
+        try:
+            with DDGS() as ddgs:
+                results = [r.get('body', '') for r in ddgs.text(topic_input, max_results=3)]
+                search_context = "\n".join(results) if results else "Niciun rezultat extern."
+            return f"SUBIECT: {topic_input}\nCONTEXT WEB ACTUAL:\n{search_context}"
+        except Exception:
+            return f"SUBIECT: {topic_input}"
 
-def generate_groq_json(prompt: str, api_key: str):
-    if not api_key.startswith("gsk_"):
-        raise Exception("Cheia Groq API lipsește sau este invalidă.")
+def select_best_groq_model(client: groq.Groq) -> str:
+    try:
+        models_response = client.models.list()
+        model_ids = [m.id for m in models_response.data]
+        
+        # Priority filter sequence requested
+        for pattern in ["llama-3.3", "llama-3.1", "mixtral", "llama3"]:
+            matches = [mid for mid in model_ids if pattern in mid.lower()]
+            if matches:
+                return matches[0]
+                
+        if model_ids:
+            return model_ids[0]
+        raise Exception(t["no_models"])
+    except Exception:
+        # Fallback hardcoded list if list() fails due to permissions/network
+        return "llama-3.3-70b-versatile"
+
+def sanitize_json_output(raw_text: str) -> dict:
+    # 🔹 Sanitizer: strip markdown code blocks and extract from first '{' to last '}'
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw_text.strip(), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    
+    first_brace = cleaned.find("{")
+    last_brace = cleaned.rfind("}")
+    
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        json_substring = cleaned[first_brace:last_brace+1]
+        return json.loads(json_substring)
+    
+    return json.loads(cleaned)
+
+def generate_groq_campaign(prompt: str, api_key: str):
+    if not api_key or not api_key.startswith("gsk_"):
+        raise Exception("Cheia Groq API este invalidă sau lipsește.")
 
     client = groq.Groq(api_key=api_key)
-    
-    # 🔹 LISTĂ DE BACKUP (Fallback Mechanism) 
-    # Dacă primul eșuează cu 404, sistemul trece la următorul automat.
-    # Toate aceste modele suportă JSON mode pe Groq.
-    candidate_models = [
-        "llama3-8b-8192",         # Stabil și rapid
-        "llama-3.3-70b-versatile",# Modelul nou, foarte capabil
-        "mixtral-8x7b-32768",     # Fallback extrem de robust
-        "gemma2-9b-it"            # Ultimul resort
-    ]
+    chosen_model = select_best_groq_model(client)
     
     system_prompt = (
-        "You are an elite B2B Social Media Content Strategist. "
-        "Write hyper-engaging, data-backed social media posts. "
-        "RULES:\n"
-        "1. Start with a controversial hook or hard metric.\n"
-        "2. Provide actionable insights.\n"
-        "3. YOU MUST RESPOND ONLY IN VALID JSON FORMAT with exactly these keys: "
-        "'linkedin' (string), 'twitter' (string), 'instagram' (string), 'img_prompt' (string for FLUX image generator)."
+        "You are an elite B2B Social Media Content Strategist and Growth Hacker. "
+        "Write hyper-engaging, highly specific, data-backed social media campaigns. "
+        "CRITICAL: YOU MUST RESPOND EXCLUSIVELY IN VALID JSON FORMAT. "
+        "No conversational text outside the JSON object. "
+        "Keys required: 'linkedin' (string), 'twitter' (string), 'instagram' (string), 'img_prompt' (string for FLUX image generator in English)."
     )
     
-    last_error = None
+    completion = client.chat.completions.create(
+        model=chosen_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        max_tokens=2000,
+        response_format={"type": "json_object"}
+    )
     
-    for model_name in candidate_models:
-        try:
-            stream = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt}, 
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1500,
-                response_format={"type": "json_object"},
-                stream=True
-            )
-            
-            full_response = ""
-            for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    full_response += chunk.choices[0].delta.content
-                    yield chunk.choices[0].delta.content, full_response
-            
-            # Dacă am ajuns aici, stream-ul s-a terminat cu succes; întrerupem fallback-ul
-            return 
-            
-        except groq.NotFoundError as e:
-            # Modelul nu există sau a fost retras, salvăm eroarea și încercăm următorul
-            last_error = f"Model {model_name} indisponibil."
-            continue
-        except Exception as e:
-            # Alte erori (rate limit, API down etc.)
-            last_error = str(e)
-            continue
-            
-    # Dacă bucla se termină fără a returna succes, ridicăm excepția finală
-    raise Exception(f"Toate modelele au eșuat. Ultima eroare: {last_error}")
-
+    raw_content = completion.choices[0].message.content
+    return sanitize_json_output(raw_content)
 
 def generate_image_huggingface(image_prompt: str, api_key: str) -> bytes:
     API_URL = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {"inputs": image_prompt, "options": {"wait_for_model": True}}
-    response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+    response = requests.post(API_URL, headers=headers, json=payload, timeout=35)
     response.raise_for_status()
     return response.content
 
-# ==========================================
-# 4. MODAL SETĂRI 
-# ==========================================
-@st.dialog("⚙️ Setări & Preferințe")
+# ==============================================================================
+# 5. NATIVE SETTINGS DIALOG
+# ==============================================================================
+@st.dialog(t['settings_title'])
 def settings_modal():
     st.session_state.ui_lang = st.selectbox(
-        "🌐 Limba Interfeței", 
+        t['ui_lang_label'], 
         ["Română", "English"], 
         index=0 if st.session_state.ui_lang == "Română" else 1
     )
     st.markdown("---")
-    st.markdown("🔑 **Custom API Keys (Mod Nelimitat)**")
     st.session_state.user_api_key = st.text_input(
-        "Groq API Key (opțional):", 
+        t['api_key_label'], 
         value=st.session_state.user_api_key, 
         type="password",
         placeholder="gsk_..."
     )
     
-    if st.button("Salvează & Închide", use_container_width=True):
+    if st.button(t['save_close'], use_container_width=True):
         st.rerun()
 
-# ==========================================
-# 5. UI PRINCIPAL: BARA LATERALĂ & HEADER
-# ==========================================
+# ==============================================================================
+# 6. SIDEBAR & VISUAL ENERGY BAR
+# ==============================================================================
 with st.sidebar:
-    st.markdown("### 💬 Meniul Tău")
-    st.markdown("---")
+    st.markdown(f"### {t['sidebar_title']}")
     
-    if is_unlimited:
-        st.success('🌟 Mod Nelimitat Activat')
-    else:
-        count = st.session_state.quota_count
-        ramase = max(0, 3 - count)
-        delta_val = '-1 consumată' if count > 0 else None
-        
-        st.metric(label='⚡ Energie Zilnică', value=f'{ramase} rămase', delta=delta_val)
-        progress_val = max(0.0, float(ramase) / 3.0)
-        st.progress(progress_val)
-        
-    st.markdown("---")
-    if st.button("➕ Postare Nouă", use_container_width=True):
+    if st.button(t['new_chat'], use_container_width=True):
         st.session_state.current_posts = None
         st.session_state.current_image = None
         st.session_state.current_topic = ""
         st.rerun()
+        
+    st.markdown("---")
+    
+    # Visual Energy Bar / Unlimited status
+    if is_unlimited:
+        st.success(t['unlimited_badge'])
+    else:
+        current_q = st.session_state.daily_quota
+        remaining = max(0, 3 - current_q)
+        delta_str = f"-1 {t['energy_delta']}" if current_q > 0 else None
+        
+        st.metric(label=t['energy_label'], value=f"{remaining} rămase", delta=delta_str)
+        st.progress(max(0.0, float(remaining) / 3.0))
+        
+    st.markdown("---")
+    st.caption("Nexus Social AI V2.0 • Powered by Groq & FLUX")
 
-head_col1, head_col2 = st.columns([11, 1])
-with head_col1:
-    st.markdown("<h1 style='margin:0; font-size: 2.2rem; color: #2563eb;'>AI Social Media Hub</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='opacity:0.7; margin-top:0.3rem; margin-bottom:1.8rem;'>Enterprise Multi-Platform Content Generator</p>", unsafe_allow_html=True)
-with head_col2:
-    if st.button("⚙️", help="Setări"):
+# ==============================================================================
+# 7. HEADER & MAIN CONTAINER LAYOUT
+# ==============================================================================
+col_title, col_settings = st.columns([11, 1])
+with col_title:
+    st.markdown(f"<h1 style='margin:0; font-size: 2.3rem; color: #2563eb;'>{t['app_title']}</h1>", unsafe_allow_html=True)
+    st.markdown(f"<p style='opacity:0.7; margin-top:0.3rem; margin-bottom:1.5rem;'>{t['app_sub']}</p>", unsafe_allow_html=True)
+with col_settings:
+    if st.button(t['settings_btn'], help="Settings"):
         settings_modal()
 
-# ==========================================
-# 6. UI: CONFIGURARE CAMPANIE
-# ==========================================
+# 🔹 Card Layout: Campaign Configuration Form
 with st.container(border=True):
-    st.markdown('#### 🎯 Configurare Campanie')
+    st.markdown(f"#### {t['config_header']}")
     
     topic_input = st.text_input(
-        "🔗 Subiect detaliat sau URL Articol:", 
+        t['input_label'], 
         value=st.session_state.current_topic, 
-        placeholder="Ex: https://techcrunch.com/... SAU Analiză despre agentic AI"
+        placeholder=t['input_placeholder']
     )
     
     col_opt1, col_opt2 = st.columns(2)
     with col_opt1:
-        lang = st.selectbox("🌐 Limba Conținutului", ["Română", "English", "Français", "Deutsch"])
+        lang = st.selectbox(t['lang_label'], ["Română", "English", "Français", "Deutsch"])
     with col_opt2:
-        tone = st.selectbox("⚡ Tonul Campaniei", ["Profesional & Analitic", "Casual & Prietenos", "Provocator", "Educațional"])
+        tone = st.selectbox(t['tone_label'], ["Profesional & Analitic", "Casual & Prietenos", "Provocator", "Educațional"])
         
-    with st.expander("🎭 Brand Persona (Opțional)"):
-        brand_persona = st.text_area("Instrucțiuni speciale de ton", height=70)
+    with st.expander(t['persona_label']):
+        brand_persona = st.text_area("Persona details", placeholder=t['persona_placeholder'], height=75, label_visibility="collapsed")
         
-    generate_image_toggle = st.toggle("🎨 Generare Imagine (FLUX AI)", value=True)
-    generate_btn = st.button("✨ Generează Postările", type="primary")
+    generate_image_toggle = st.toggle(t['toggle_img'], value=True)
+    generate_btn = st.button(t['btn_gen'], type="primary")
 
-# ==========================================
-# 7. LOGICA DE GENERARE & ERROR HANDLING
-# ==========================================
+# ==============================================================================
+# 8. EXECUTION & GENERATION LOGIC
+# ==============================================================================
 if generate_btn:
-    if not is_unlimited and st.session_state.quota_count >= 3:
-        st.error("❌ Ai atins limita de 3 generări zilnice. Adaugă propria cheie Groq în Setări!")
+    if not is_unlimited and st.session_state.daily_quota >= 3:
+        st.error(t['quota_exceeded'])
         st.stop()
         
     if not topic_input.strip():
-        st.warning("⚠️ Introdu un subiect sau un link valid.")
+        st.warning(t['warning_empty'])
         st.stop()
         
     st.session_state.current_topic = topic_input
-    context_data = topic_input
-
-    if topic_input.strip().startswith("http"):
-        with st.spinner("🌍 Extragem datele din URL..."):
-            try:
-                context_data = scrape_url_content(topic_input.strip())
-            except Exception as e:
-                st.error(str(e))
-                st.stop()
-    else:
-        context_data = f"SUBIECT: {topic_input}."
-
-    st.markdown("### ✍️ Se generează conținutul...")
-    stream_container = st.empty()
     
-    user_prompt = f"CONTEXT:\n{context_data}\n\nLANG: {lang}\nTONE: {tone}\nPERSONA: {brand_persona}"
+    # Context Retrieval via Jina AI or DuckDuckGo
+    is_url = topic_input.strip().startswith("http")
+    spinner_text = t['spinner_jina'] if is_url else t['spinner_ddg']
+    
+    with st.spinner(spinner_text):
+        try:
+            context_data = fetch_context_data(topic_input.strip())
+        except Exception as e:
+            st.error(str(e))
+            st.stop()
+            
+    prompt = (
+        f"TARGET CONTEXT:\n{context_data}\n\n"
+        f"LANGUAGE FOR POSTS: {lang}\n"
+        f"TONE: {tone}\n"
+        f"BRAND PERSONA INSTRUCTIONS: {brand_persona}\n"
+    )
     
     try:
-        final_json_string = ""
-        with st.spinner("🧠 AI-ul gândește și scrie postările..."):
-            # Apelăm funcția refăcută cu fallback
-            for chunk_char, accumulated_text in generate_groq_json(user_prompt, ACTIVE_GROQ_KEY):
-                final_json_string = accumulated_text
-                stream_container.markdown("```json\n" + accumulated_text + "▌\n```")
-        
-        stream_container.empty()
-        
-        parsed_data = json.loads(final_json_string)
-        
+        with st.spinner(t['spinner_gen']):
+            parsed_json = generate_groq_campaign(prompt, ACTIVE_GROQ_KEY)
+            
         st.session_state.current_posts = {
-            "linkedin": parsed_data.get("linkedin", ""),
-            "twitter": parsed_data.get("twitter", ""),
-            "instagram": parsed_data.get("instagram", ""),
-            "img_prompt": parsed_data.get("img_prompt", f"Corporate illustration of {topic_input}, 8k")
+            "linkedin": parsed_json.get("linkedin", ""),
+            "twitter": parsed_json.get("twitter", ""),
+            "instagram": parsed_json.get("instagram", ""),
+            "img_prompt": parsed_json.get("img_prompt", f"Professional corporate visual of {topic_input}, 8k")
         }
-        
     except json.JSONDecodeError:
-        st.error("Eroare: AI-ul nu a returnat un JSON valid.")
+        st.error(t['error_json'])
         st.stop()
     except Exception as api_err:
-        st.error(f"Eroare API: {str(api_err)}")
+        st.error(f"Eroare: {str(api_err)}")
         st.stop()
-
+        
+    # Image Generation via Hugging Face FLUX
     st.session_state.current_image = None
     if generate_image_toggle and HUGGINGFACE_API_KEY:
-        with st.spinner("🎨 Se sintetizează vizualul (Hugging Face FLUX)..."):
+        with st.spinner(t['spinner_flux']):
             try:
                 st.session_state.current_image = generate_image_huggingface(
                     st.session_state.current_posts['img_prompt'], 
                     HUGGINGFACE_API_KEY
                 )
-            except Exception as e:
-                st.warning(f"Imaginea nu a putut fi generată: {str(e)}")
-
+            except Exception as img_err:
+                st.warning(f"Imaginea nu a putut fi generată: {str(img_err)}")
+                
     if not is_unlimited:
-        st.session_state.quota_count += 1
+        st.session_state.daily_quota += 1
         
-    st.toast('🚀 Postările au fost generate cu succes!', icon='✅')
+    st.toast(t['toast_success'], icon='✅')
     st.rerun()
 
-# ==========================================
-# 8. UI: REZULTATE CAMPANIE
-# ==========================================
+# ==============================================================================
+# 9. RESULTS CARD & TABS CONTAINER
+# ==============================================================================
 if st.session_state.current_posts:
     with st.container(border=True):
-        st.markdown("#### 📱 Vizualizare și Export")
+        st.markdown(f"#### {t['results_header']}")
         
-        tab_li, tab_tw, tab_ig, tab_img = st.tabs(["💼 LinkedIn", "🐦 Twitter", "📸 Instagram", "🖼️ Vizual Generat"])
+        tab_li, tab_tw, tab_ig, tab_img = st.tabs([
+            t['tab_li'], 
+            t['tab_tw'], 
+            t['tab_ig'], 
+            t['tab_img']
+        ])
         
         with tab_li:
-            st.text_area("Copy:", value=st.session_state.current_posts['linkedin'], height=250, key="ta_li", label_visibility="collapsed")
+            st.text_area("LinkedIn Content", value=st.session_state.current_posts['linkedin'], height=250, key="ta_li", label_visibility="collapsed")
             
         with tab_tw:
-            st.text_area("Copy:", value=st.session_state.current_posts['twitter'], height=150, key="ta_tw", label_visibility="collapsed")
+            st.text_area("Twitter Content", value=st.session_state.current_posts['twitter'], height=150, key="ta_tw", label_visibility="collapsed")
             
         with tab_ig:
-            ig_full = f"social_hub_official {st.session_state.current_topic}\n\n{st.session_state.current_posts['instagram']}"
-            st.text_area("Copy:", value=ig_full, height=200, key="ta_ig", label_visibility="collapsed")
+            ig_full = f"nexus_social_official {st.session_state.current_topic}\n\n{st.session_state.current_posts['instagram']}"
+            st.text_area("Instagram Content", value=ig_full, height=200, key="ta_ig", label_visibility="collapsed")
             
         with tab_img:
             if st.session_state.current_image:
-                col_img_1, col_img_2 = st.columns([2, 1])
-                with col_img_1:
+                col_img_view, col_img_info = st.columns([2, 1])
+                with col_img_view:
                     st.image(st.session_state.current_image, use_container_width=True)
-                with col_img_2:
-                    st.markdown("**Prompt vizual AI:**")
+                with col_img_info:
+                    st.markdown(t['img_prompt_label'])
                     st.caption(st.session_state.current_posts['img_prompt'])
-                    st.download_button("📥 Descarcă JPG", st.session_state.current_image, "campanie.jpg", "image/jpeg", use_container_width=True)
+                    st.download_button(t['download_img'], st.session_state.current_image, "nexus_campaign.jpg", "image/jpeg", use_container_width=True)
             else:
-                st.info("Generarea de imagini a fost dezactivată sau a eșuat.")
+                st.info("Generarea vizuală este inactivă sau cheia Hugging Face lipsește.")
+                
+        st.markdown("---")
+        full_export = (
+            f"=== LINKEDIN ===\n{st.session_state.current_posts['linkedin']}\n\n"
+            f"=== TWITTER ===\n{st.session_state.current_posts['twitter']}\n\n"
+            f"=== INSTAGRAM ===\n{st.session_state.current_posts['instagram']}"
+        )
+        st.download_button(t['download_all'], data=full_export, file_name="nexus_campaign.txt", mime="text/plain")
