@@ -164,7 +164,6 @@ def fetch_context_data(topic_input: str) -> str:
 def select_best_groq_model(client: groq.Groq) -> str:
     try:
         models_response = client.models.list()
-        # Filtrare strictă: excludem modelele audio/whisper/embeddings
         valid_models = [
             m.id for m in models_response.data 
             if not any(x in m.id.lower() for x in ["whisper", "audio", "embed", "tts", "stt", "vision"])
@@ -201,19 +200,16 @@ def generate_groq_campaign(prompt: str, api_key: str):
     client = groq.Groq(api_key=api_key)
     chosen_model = select_best_groq_model(client)
     
-    # 🌟 NOUL PROMPT STRATEGIC DE ELITĂ (DEMAND GENERATION & CONTRARIAN TAKES)
     system_prompt = (
-        "Ești un Strateg de Conținut B2B de elită și Growth Hacker specializat în generarea de cereri (demand generation) "
-        "și poziționare de brand pe canale multiple. Sarcina ta este să creezi campanii de social media hiper-engaginge, "
-        "extrem de specifice, bazate pe date și tendințe actuale.\n\n"
-        "Campania trebuie să evite clișeele și limbajul de lemn corporatist, punând accent pe valoare practică, "
-        "perspective nepopulare dar argumentate (contrarian takes) și studii de caz reale.\n\n"
-        "CRITICAL: TREBUIE SĂ RĂSPUNZI EXCLUSIV ÎN FORMAT JSON VALID. Fără text conversațional în afara obiectului JSON.\n\n"
-        "Chei obligatorii în structura JSON:\n"
-        "1. 'linkedin': Un text lung, structurat tip fir logic (hook puternic, corp cu puncte clare bazate pe date/experiență, call-to-action de conversie), optimizat pentru algoritmii actuali de engagement profesional.\n"
-        "2. 'twitter': O serie conectată (thread) de 3 până la 5 tweet-uri cu o idee densă, concisă și cu impact vizual ridicat pe linie de growth.\n"
-        "3. 'instagram': O descriere (caption) dinamică, orientată vizual și narativ, incluzând sugestii clare pentru textul afișat pe ecran (on-screen text).\n"
-        "4. 'img_prompt': Un prompt detaliat în limba engleză, optimizat pentru generatoare avansate de imagini (FLUX), descriind o vizualizare curată, modernă, non-stock, relevantă pentru tema postării."
+        "Ești un Strateg de Conținut B2B de elită și Growth Hacker. "
+        "CRITICAL: TREBUIE SĂ RĂSPUNZI EXCLUSIV UNUI SINGUR OBIECT JSON VALID (începând obligatoriu cu { și terminând cu }). "
+        "NU folosi array-uri (liste cu paranteze pătrate) la nivel principal sau în interior. "
+        "Toate valorile din chei trebuie să fie string-uri simple (folosește \\n pentru rânduri noi).\n\n"
+        "Chei obligatorii în obiectul JSON:\n"
+        "1. 'linkedin': textul complet pentru postarea de LinkedIn ca un singur string.\n"
+        "2. 'twitter': textul complet pentru un thread de Twitter ca un singur string, cu ideile separate prin \\n.\n"
+        "3. 'instagram': textul complet pentru caption și textul de pe ecran ca un singur string.\n"
+        "4. 'img_prompt': un prompt detaliat în limba engleză pentru FLUX ca un singur string."
     )
     
     completion = client.chat.completions.create(
@@ -222,7 +218,7 @@ def generate_groq_campaign(prompt: str, api_key: str):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.75,
+        temperature=0.7,
         max_tokens=2500,
         response_format={"type": "json_object"}
     )
