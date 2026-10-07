@@ -180,11 +180,12 @@ def generate_groq_campaign(prompt: str, api_key: str):
 
     client = groq.Groq(api_key=api_key)
     
-    # Listă curată și strict verificată de modele de producție pentru chat & JSON mode
+    # Listă curată actualizată cu modele active de producție pentru chat & JSON mode
     candidate_models = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768"
+        "llama-3.1-70b-versatile",
+        "gemma2-9b-it"
     ]
     
     system_prompt = (
