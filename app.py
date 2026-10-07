@@ -138,7 +138,7 @@ ACTIVE_GROQ_KEY = st.session_state.user_api_key if is_unlimited else get_secret(
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
 
 # ==============================================================================
-# 4. BACKEND: JINA AI READER, DUCKDUCKGO & BULLET-PROOF DYNAMIC GROQ
+# 4. BACKEND: JINA, DUCKDUCKGO & BULLET-PROOF MULTILINGUAL GROQ
 # ==============================================================================
 def fetch_context_data(topic_input: str) -> str:
     is_url = topic_input.strip().startswith("http")
@@ -172,8 +172,17 @@ def sanitize_json_output(raw_text: str) -> dict:
     
     return json.loads(cleaned)
 
+def get_robust_value(d: dict, *keys) -> str:
+    """Caută în dicționar cheile specificate, ignorând majusculele/minusculele."""
+    if not isinstance(d, dict):
+        return ""
+    for k in keys:
+        for actual_k, val in d.items():
+            if actual_k.lower() == k.lower() and val:
+                return str(val)
+    return ""
+
 def select_best_groq_model(client: groq.Groq) -> str:
-    """Descoperă dinamic cel mai bun model text de pe Groq filtrând strict modelele audio/speciale."""
     try:
         models_response = client.models.list()
         excluded_keywords = ["audio", "whisper", "embed", "tts", "stt", "vision", "orpheus", "guard", "rerank"]
@@ -184,7 +193,6 @@ def select_best_groq_model(client: groq.Groq) -> str:
             if not any(kw in m_id_lower for kw in excluded_keywords):
                 valid_models.append(m.id)
                 
-        # Căutăm prioritic modele standard de producție versatile sau instant
         for pattern in ["llama-3.3", "llama-3.1"]:
             matches = [mid for mid in valid_models if pattern in mid.lower()]
             if matches:
@@ -195,30 +203,29 @@ def select_best_groq_model(client: groq.Groq) -> str:
     except Exception:
         pass
     
-    # Fallback static garantat în caz de eroare la listare
     return "llama-3.3-70b-versatile"
 
-def generate_groq_campaign(prompt: str, api_key: str):
+def generate_groq_campaign(prompt: str, api_key: str) -> dict:
     if not api_key or not api_key.startswith("gsk_"):
         raise Exception("Cheia Groq API este invalidă sau lipsește.")
 
     client = groq.Groq(api_key=api_key)
-    
-    # Arhitectură Bullet-Proof: Model dinamic + candidați de rezervă verificați
     dynamic_model = select_best_groq_model(client)
     candidate_models = [dynamic_model, "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-    candidate_models = list(dict.fromkeys(candidate_models)) # elimină duplicatele păstrând ordinea
+    candidate_models = list(dict.fromkeys(candidate_models))
     
+    # 🌟 System prompt în limba engleză cu directivă strictă multilingvă și evitare trunchiere
     system_prompt = (
-        "Ești un Strateg de Conținut B2B de elită și Growth Hacker. "
-        "CRITICAL: TREBUIE SĂ RĂSPUNZI EXCLUSIV UNUI SINGUR OBIECT JSON VALID (începând obligatoriu cu { și terminând cu }). "
-        "NU folosi array-uri (liste cu paranteze pătrate) la nivel principal sau în interior. "
-        "Toate valorile din chei trebuie să fie string-uri simple (folosește \\n pentru rânduri noi).\n\n"
-        "Chei obligatorii în obiectul JSON:\n"
-        "1. 'linkedin': textul complet pentru postarea de LinkedIn ca un singur string.\n"
-        "2. 'twitter': textul complet pentru un thread de Twitter ca un singur string, cu ideile separate prin \\n.\n"
-        "3. 'instagram': textul complet pentru caption și textul de pe ecran ca un singur string.\n"
-        "4. 'img_prompt': un prompt detaliat în limba engleză pentru FLUX ca un singur string."
+        "You are an elite B2B Content Strategist and Growth Hacker. "
+        "CRITICAL RULE 1: YOU MUST RESPOND EXCLUSIVELY WITH A SINGLE VALID JSON OBJECT (starting with { and ending with }). "
+        "DO NOT use arrays (lists with square brackets) at the root level or inside values. "
+        "All values must be simple strings (use \\n for line breaks).\n\n"
+        "CRITICAL RULE 2 (LANGUAGE): You MUST generate the content of all social media posts in the exact language specified under 'LANGUAGE FOR CONTENT' in the user prompt (e.g. if 'Română', write in Romanian; if 'English', write in English; if 'Français', write in French, etc.).\n\n"
+        "Mandatory keys in the JSON object:\n"
+        "1. 'linkedin': complete professional LinkedIn post text as a single string.\n"
+        "2. 'twitter': complete Twitter thread text as a single string, with tweets separated by \\n\\n.\n"
+        "3. 'instagram': complete Instagram caption and on-screen text instructions as a single string.\n"
+        "4. 'img_prompt': a detailed visual prompt in English for FLUX as a single string."
     )
     
     last_error = None
@@ -231,7 +238,7 @@ def generate_groq_campaign(prompt: str, api_key: str):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.75,
-                max_tokens=2500,
+                max_tokens=1024,  # Optimizat pentru a preveni trunchierea JSON-ului
                 response_format={"type": "json_object"}
             )
             raw_content = completion.choices[0].message.content
@@ -365,11 +372,12 @@ if generate_btn:
         with st.spinner(t['spinner_gen']):
             parsed_json = generate_groq_campaign(prompt, ACTIVE_GROQ_KEY)
             
+        # Folosim extragerea robustă case-insensitive pentru a asigura popularea tuturor tab-urilor
         st.session_state.current_posts = {
-            "linkedin": parsed_json.get("linkedin", ""),
-            "twitter": parsed_json.get("twitter", ""),
-            "instagram": parsed_json.get("instagram", ""),
-            "img_prompt": parsed_json.get("img_prompt", f"Professional modern visual representation of {topic_input}, 8k")
+            "linkedin": get_robust_value(parsed_json, "linkedin", "li"),
+            "twitter": get_robust_value(parsed_json, "twitter", "tw", "x"),
+            "instagram": get_robust_value(parsed_json, "instagram", "ig"),
+            "img_prompt": get_robust_value(parsed_json, "img_prompt", "image_prompt", "prompt") or f"Professional modern visual representation of {topic_input}, 8k"
         }
     except json.JSONDecodeError:
         st.error(t['error_json'])
